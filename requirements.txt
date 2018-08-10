@@ -1,0 +1,8 @@
+# Models
+pytorch
+torchtext
+
+# Progress bars on iterators
+tqdm
+
+# Optional NLP tools (needed for NLP task)
