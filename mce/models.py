@@ -945,11 +945,12 @@ class masked_image_classifier():
             index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add((X.squeeze() * np.tile(mask,(X.shape[0],1,1))).reshape(-1,W*H))                  # add vectors to the index
         D, Idxs = index.search(x.view(-1,W*H).cpu().numpy(), self.knn)     # actual search
-        ## Fixme: not this looks like a bug from numpy
+        ## FIXME: this looks like a bug from numpy
         if Idxs.shape[0] < Idxs.shape[1]:
             # If # rows is too small, can't slice Y for some reason. Add dummy rows.
             diff = 30
-            Classes = Y[np.vstack((Idxs,np.zeros((diff, self.knn))))][:Idxs.shape[0],:]
+            #pdb.set_trace()
+            Classes = Y[np.vstack((Idxs,np.zeros((diff, self.knn), dtype=int)))][:Idxs.shape[0],:]
         else:
             Classes = Y[Idxs]
         #pdb.set_trace()
@@ -963,7 +964,7 @@ class masked_image_classifier():
 
     def _get_reference_data(self,loader):
         if self.task == 'mnist':
-            pdb.set_trace()
+            #pdb.set_trace()
             if loader.dataset.train:
                 X_full = (loader.dataset.train_data/255).numpy().astype('float32')
                 Y_full = loader.dataset.train_labels.numpy()
@@ -1015,6 +1016,7 @@ class masked_image_classifier():
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data),ntrain,
                     100. * batch_idx / len(train_loader), loss.item()))
+            break
 
     def test(self, test_loader, epoch):
         self.net.eval()
@@ -1036,9 +1038,9 @@ class masked_image_classifier():
         #ntest = len(test_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
 
         with torch.no_grad():
-            for data, target in test_loader:
+            for (data, target) in tqdm(test_loader):
+                #print(idx)
                 data, target = data.to(self.device), target.to(self.device)
-
                 mask, S = self._sample_mask()
 
                 # Mask Inputs

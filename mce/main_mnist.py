@@ -22,6 +22,7 @@ matplotlib.use('Agg')
 from models import image_classifier
 from models import masked_image_classifier
 from utils import generate_dir_names
+from mce import MCExplainer
 
 
 def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size = 64,
@@ -161,7 +162,8 @@ def main():
         # Train meta model
         mask_model = masked_image_classifier(task = 'mnist', optim = args.optim,
                                              mask_type = args.attrib_type,
-                                             padding = args.attrib_padding, mask_size = mask_size)
+                                             padding = args.attrib_padding,
+                                             mask_size = mask_size)
         mask_model.train(train_loader, test_loader, epochs = args.epochs_meta)
         mask_model.save(metam_path)
     else:
