@@ -14,8 +14,10 @@ from torchvision.datasets import MNIST
 from torch.utils.data.sampler import SubsetRandomSampler
 import torch.utils.data.dataloader as dataloader
 
-# import matplotlib
-# matplotlib.use('Agg')
+import matplotlib
+if matplotlib.get_backend() == 'Qt5Agg':
+    # Means this is being run in server, need to modify backend
+    matplotlib.use('Agg')
 
 
 # Local Imports
