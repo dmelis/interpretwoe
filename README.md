@@ -12,6 +12,7 @@ Multistep Contrsative Explanations
 * numpy
 * matplotlib
 * nltk (needed only for text applications)
+* torchtext (needed only for text applications)
 * shapely
 * squarify
 
