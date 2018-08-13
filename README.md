@@ -28,7 +28,19 @@ After cloning, do:
   python setup.py install
 ```
 
-Download Pretrained Models:
+## How to use
+
+To train models from sratch:
+```
+  python main_mnist.py --train-classif --train-meta
+```
+
+To use pretrained models:
+
+```
+  python main_mnist.py
+```
+<!-- Otherwise, download Pretrained Models:
 
 ```
 wget  people.csail.mit.edu/davidam/MCE/checkpoints/mnist/classif.pth -P checkpoints/mnist/
@@ -37,12 +49,4 @@ wget  people.csail.mit.edu/davidam/MCE/checkpoints/mnist/mask_model_7x7.pth -P c
 
 wget  people.csail.mit.edu/davidam/MCE/checkpoints/hasy/classif.pth -P checkpoints/hasy/
 
-wget  people.csail.mit.edu/davidam/MCE/checkpoints/hasy/mask_model_10x10.pth -P checkpoints/hasy/
-
-```
-
-Run Demo:
-
-```
-  python main_mnist.py
-```
+wget  people.csail.mit.edu/davidam/MCE/checkpoints/hasy/mask_model_10x10.pth -P checkpoints/hasy/ -->

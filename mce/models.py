@@ -459,11 +459,12 @@ class image_classifier(nn.Module):
 
     @staticmethod
     def load(path):
-        if 'gpu' in path:
-            model = torch.load(path,
+        # if 'gpu' in path:
+        #     model = torch.load(path,
+        #                 map_location=lambda storage, location: storage)
+        # else:
+        model =  torch.load(path,
                         map_location=lambda storage, location: storage)
-        else:
-            model = torch.load(path)
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         model.device = torch.device(dev)
         return model
@@ -899,11 +900,13 @@ class masked_image_classifier():
 
     @staticmethod
     def load(path):
-        if 'gpu' in path:
-            model = torch.load(path,
-                        map_location=lambda storage, location: storage)
-        else:
-            model = torch.load(path)
+        # if 'gpu' in path:
+        #     model = torch.load(path,
+        #                 map_location=lambda storage, location: storage)
+        # else:
+        #     model = torch.load(path)
+        model = torch.load(path,
+                    map_location=lambda storage, location: storage)
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         model.device = torch.device(dev)
         #model.net.device_str = dev
@@ -1141,9 +1144,9 @@ class masked_image_classifier():
                 axb1.set_title('True Class Freq')
                 axb2.set_title('Pred Class Freq')
 
-        if not os.path.exists('out/mask_' + self.task):
-            os.makedirs('out/mask_{}/'.format(self.task))
-        plt.savefig('out/mask_{}/{}.png'.format(self.task, str(epoch).zfill(3)), bbox_inches='tight')
+        if not os.path.exists('../out/mask_' + self.task):
+            os.makedirs('../out/mask_{}/'.format(self.task))
+        plt.savefig('../out/mask_{}/{}.png'.format(self.task, str(epoch).zfill(3)), bbox_inches='tight')
         plt.show()
 
 
