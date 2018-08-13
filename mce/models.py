@@ -452,7 +452,8 @@ class image_classifier(nn.Module):
         # Hack - serialization of torch.device is very recent https://github.com/pytorch/pytorch/pull/7713
         device = self.device
         self.device = None
-        torch.save(self, open(path, 'wb'))
+        fname = path + '.gpu' if self.device_str == 'gpu' else '' + '.pth'
+        torch.save(self, open(fname, 'wb'))
         self.device = device
         print('Saved!')
 

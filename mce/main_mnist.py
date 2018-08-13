@@ -133,17 +133,16 @@ def main():
                         )
 
     ### TRAIN OR LOAD CLASSIFICATION MODEL TO BE EXPLAINED
-    classif_path = os.path.join(model_path, "classif.pth")
-    if args.train_classif or (not os.path.isfile(classif_path)):
+    classif_path = os.path.join(model_path, "classif")
+    if args.train_classif or (not os.path.isfile(classif_path + '.pth')):
         print('Training classifier from scratch')
         clf = image_classifier(task='mnist',optim = args.optim, use_cuda = args.cuda)
         clf.train(train_loader, test_loader, epochs = args.epochs_classif)
         clf.save(classif_path)
     else:
         print('Loading pre-trained classifier')
-        clf = torch.load(classif_path)
+        clf = torch.load(classif_path + '.pth')
         clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
     ### TRAIN OR LOAD META-MODEL OF MASKED INPUTS
     mask_size = (args.attrib_width, args.attrib_height)
