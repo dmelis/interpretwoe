@@ -1,0 +1,8 @@
+
+# Compiled package
+build/
+dist/
+*egg-info*
+
+# Python complied
+*.pyc
