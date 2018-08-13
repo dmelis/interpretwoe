@@ -5,9 +5,18 @@ from methods import mnist_normalize, mnist_unnormalize
 from IPython.display import clear_output
 import pdb
 
+
+import signal
+import time
+
 import matplotlib.pyplot as plt
 
 from functools import partial
+
+# Local
+from utils import detect_kernel
+
+KERNEL=detect_kernel()
 
 ################################################################################
 #####################       Scoring functions      #############################
@@ -242,8 +251,6 @@ class Explanation(object):
         print('Done!')
 
 
-
-
 class MCExplainer(object):
     def __init__(self, classifier, mask_model, classes, loss_type = 'norm_delta',
                 reg_type = 'exp', crit_alpha=1, crit_p=1, plot_type = 'bar'):
@@ -256,6 +263,8 @@ class MCExplainer(object):
         self.crit_alpha = crit_alpha
         self.crit_p     = crit_p
         self.task       = mask_model.task
+        #self.pykernel   = detect_kernel()
+
 
         if self.task == 'mnist':
             self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
@@ -318,17 +327,33 @@ class MCExplainer(object):
 
 
 
-    def explain(self, x, y, verbose = False, show_plot = 1, save_path = None):
+    def explain(self, x, y = None, verbose = False, show_plot = 1, save_path = None):
+        # if y not provided, call classif model
+        if y is None:
+            out = self.classifier(x)
+            p, y = out.max(1)
+            y = y.item()
+
+        if show_plot > 1:
+            plt.imshow(x.squeeze(), cmap='Greys')
+            plt.title('Prediction: ' + self.classes[y] + ' (class no.{})'.format(y), fontsize = 20)
+            plt.xticks([])
+            plt.yticks([])
+            plt.show()
+            #print('hasdasd')
+
+        #print(asd.asd)
+
         V = list(range(len(self.classes)))
         E = Explanation(x, y, self.classes, masker = self.masker, task = self.task)
         step = 0
         while len(V) > 1:
-            print(step)
-            if step == 5:
-                #show_plot = 2
-                verbose = 2
-                global DEBUG
-                DEBUG=True
+            print('Explanation step: ', step)
+            # if step == 5:
+            #     #show_plot = 2
+            #     verbose = 2
+            #     global DEBUG
+            #     DEBUG=True
 
             if verbose > 1:
                 print(V)
@@ -407,6 +432,23 @@ class MCExplainer(object):
         if force_include_class:
             assert force_include_class in V, "Error: class to be force-included not in ground set"
 
+        if KERNEL == 'terminal':
+            #print("PLT ION")
+            fig, ax = plt.subplots(1, 3, figsize = (4*3,4))
+            plt.ion()
+            plt.show()
+            ims = None
+        else:
+            fig, ax, ims = None, None, None
+
+
+        def handler(*args):
+            print('Ctrl-c detected: will stop iterative plotting')
+            nonlocal show_plot
+            show_plot = min(show_plot, 1)
+
+        signal.signal(signal.SIGINT, handler)
+
         for ii in range(0, W-w):
             for jj in range(0,H-h):
                 #print(ii,jj)
@@ -423,12 +465,27 @@ class MCExplainer(object):
 
                 labstr = 'Current objective: {:8.4e} (i = {:2}, j = {:2})'.format(obj.item(), ii, jj)
                 if show_plot > 1:
-                    clear_output(wait=True)
-                    plot_2d_attrib_entailment(x, X_s_plot, S, C, V, hist_V,
+                    if KERNEL == 'ipython':
+                        clear_output(wait=True)
+                        ax = None
+
+                    ax, rects, ims = plot_2d_attrib_entailment(x, X_s_plot, S, C, V, hist_V,
                                         plot_type = plot_type, class_names = class_names,
-                                        title = labstr, sort_bars = False)
+                                        title = labstr, ax = ax, ims =ims, return_elements = True
+                                        )
+
+                    if KERNEL == 'terminal':
+                        plt.draw()
+                        plt.pause(.005)
+                        #rects[0].remove()
+                        ax[0].clear() # Alternatively, do rects[0].remove(), though its slower
+                        ax[1].clear()
+                        ax[2].clear()
+                    else:
+                        plt.show()
                 elif verbose:
                     print(labstr)
+
                 if force_include_class is not None and (not force_include_class in C):
                     # Target class not in entailed set
                     #print(force_include_class, C)
@@ -442,12 +499,14 @@ class MCExplainer(object):
                 if obj > max_obj:
                     max_obj = obj
                     max_S   = S
-                #clear_output(wait=True)
 
         if max_S is None:
             print('Warning: could not find any attribute that causes the predicted class be entailed')
             return None, None
 
+        if KERNEL == 'terminal':
+            plt.ioff()
+            plt.close('all')
 
         # Reconstruct vars for optimal
         X_s, X_s_plot = masker(x, max_S)
@@ -559,7 +618,6 @@ class MCExplainer(object):
             print(labstr)
 
         return max_S, max_C, hist_V
-
 
     # def criterion(self, pred, V, tgt_classes = [7,9], sort_hist = False, p = 1, loss = 'delta', verbose = False):
     #     nclasses = len(V)

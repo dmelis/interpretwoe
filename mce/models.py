@@ -1016,7 +1016,7 @@ class masked_image_classifier():
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data),ntrain,
                     100. * batch_idx / len(train_loader), loss.item()))
-            break
+            #break
 
     def test(self, test_loader, epoch):
         self.net.eval()

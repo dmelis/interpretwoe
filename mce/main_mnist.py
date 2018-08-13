@@ -14,16 +14,16 @@ from torchvision.datasets import MNIST
 from torch.utils.data.sampler import SubsetRandomSampler
 import torch.utils.data.dataloader as dataloader
 
-import matplotlib
-matplotlib.use('Agg')
+# import matplotlib
+# matplotlib.use('Agg')
 
 
 # Local Imports
 from models import image_classifier
 from models import masked_image_classifier
 from utils import generate_dir_names
-from mce import MCExplainer
-
+#from mce import MCExplainer
+from explainers import MCExplainer
 
 def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size = 64,
                     num_workers = 1):
@@ -87,16 +87,13 @@ def parse_args():
                             default='treemap', help='Plot type of class entailment diagram')
     # device
     parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu' )
-    #parser.add_argument('--num_gpus', type=int, default=1, help='Num GPUs to use.')
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode' )
 
     # learning
     parser.add_argument('--optim', type=str, default='adam', help='optim method [default: adam]')
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
-    #parser.add_argument('--epochs', type=int, default=10, help='number of epochs for train [default: 10]')
     parser.add_argument('--epochs_classif', type=int, default=10, help='number of epochs for train [default: 10]')
     parser.add_argument('--epochs_meta', type=int, default=10, help='number of epochs for train [default: 10]')
-
     parser.add_argument('--batch_size', type=int, default=128, help='batch size for training [default: 64]')
     parser.add_argument('--objective', default='cross_entropy', help='choose which loss objective to use')
 
@@ -104,7 +101,6 @@ def parse_args():
     parser.add_argument('--model_path', type=str, default='../checkpoints', help='where to save the snapshot')
     parser.add_argument('--results_path', type=str, default='../out', help='where to dump model config and epoch stats')
     parser.add_argument('--log_path', type=str, default='../log', help='where to dump training logs  epoch stats (and config??)')
-    parser.add_argument('--summary_path', type=str, default='results/summary.csv', help='where to dump model config and epoch stats')
 
     # data loading
     parser.add_argument('--num_workers' , type=int, default=4, help='num workers for data loader')
@@ -184,16 +180,7 @@ def main():
     x  = batch_x[idx:idx+1]
     print(classes[batch_y[idx].item()])
 
-    fx = classifier(x)
-    p, pred = fx.max(1)
-
-    plt.imshow(x.squeeze(), cmap='Greys')
-    plt.title('Prediction: ' + classes[pred] + ' (class no.{})'.format(pred.item()), fontsize = 20)
-    plt.xticks([])
-    plt.yticks([])
-    plt.show()
-
-    e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
+    e = Explainer.explain(x, verbose = 0 , show_plot = 1)
 
 
 if __name__ == '__main__':

@@ -23,6 +23,20 @@ import matplotlib
 import squarify
 
 
+
+def detect_kernel():
+    try:
+        __IPYTHON__
+    except NameError:
+        print("Not in IPython Kernel")
+        return 'terminal'
+    else:
+        print("In IPython Kernel")
+        return 'ipython'
+
+KERNEL=detect_kernel()
+
+
 def tensorshow(img, greys = False):
     """
         For images in pytorch tensor format
@@ -389,7 +403,7 @@ def plot_text_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
 def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
               title = None, show_cropped = True,
               sort_bars = True, topk = 10, class_names = None, cmap = 'Greys',
-              ax = None, save_path = None):
+              ax = None, ims = None, return_elements = False, save_path = None):
     """
         Plot of 2D input, masked attribute and entailed probs
     """
@@ -397,8 +411,20 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     if ax is None:
         ncol = 3 if show_cropped else 2
         fig, ax = plt.subplots(1, ncol, figsize = (4*ncol,4))
+        #redraw = True
     else:
         ncol = len(ax)
+        #redraw = len(ax[0].images) == 0
+
+        #pdb.set_trace()
+
+    # if timeout:
+    #     print('here')
+    #     def close_event():
+    #         plt.close() #timer calls this function after 3 seconds and closes the window
+    #     timer = fig.canvas.new_timer(interval = 3000) #creating a timer object and setting an interval of 3000 milliseconds
+    #     timer.add_callback(close_event)
+    #     timer.start()
 
     if type(V) is list:
         V = np.array(V)
@@ -413,20 +439,28 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     h, w   = len(S_x), len(S_y)
 
     #ax[0].axis('off')
-    im0 = ax[0].imshow(x.reshape(H, W),  aspect="auto", cmap = cmap)#, cmap='Greys_r')
-    ax[0].set_xticks([])
-    ax[0].set_yticks([])
-    ax[0].set_aspect('equal', 'box')
+    #pdb.set_trace()
+    if ims is None:
+        im0 = ax[0].imshow(x.reshape(H, W),  aspect="auto", cmap = cmap)#, cmap='Greys_r')
+        ax[0].set_xticks([])
+        ax[0].set_yticks([])
+        ax[0].set_aspect('equal', 'box')
+
     #ax[0].set_title('Bla')
     if show_cropped:
-        ax[1].imshow(xs.reshape(H, W), aspect="auto", cmap = cmap)
-        #ax[1].axis('off')
-        ax[1].set_xticks([])
-        ax[1].set_yticks([])
-        ax[1].set_aspect('equal', 'box')
+        if ims is None:
+            im1 = ax[1].imshow(xs.reshape(H, W), aspect="auto", cmap = cmap)
+            ax[1].set_xticks([])
+            ax[1].set_yticks([])
+            ax[1].set_aspect('equal', 'box')
+        else:
+            ims[1].set_data(xs.reshape(H, W))
+
+    rects = []
     for i in range(2):
-        rect = patches.Rectangle((jj-.5,ii-.5),w,h,linewidth=1,edgecolor='r',facecolor='none')
-        ax[i].add_patch(rect)
+        rects.append(patches.Rectangle((jj-.5,ii-.5),w,h,linewidth=1,edgecolor='r',facecolor='none'))
+        ax[i].add_patch(rects[i])
+
 
     try:
         C_idxs = [np.where(V == k)[0][0] for k in C]
@@ -439,6 +473,7 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
 
     ### Third pane shows entailed classes
     if sort_bars or (plot_type == 'treemap'): # treemap always need sorted vals
+        #pdb.set_trace()
         arridx = hist.argsort()[::-1]
         hist = hist[arridx]
         classes = classes[arridx]
@@ -455,6 +490,8 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
 
     if title:
         plt.suptitle(title, fontsize = 18)
+    if return_elements:
+        return ax, rects, ims
 
 def v_color(ob):
     COLOR = {
