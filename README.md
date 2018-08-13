@@ -21,24 +21,26 @@ pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x8
 pip3 install torchvision
 ```
 
-## Setting up
+<!-- ## Setting up
 
 After cloning, do:
 ```
   python setup.py install
-```
+``` -->
 
 ## How to use
 
 To train models from sratch:
 ```
-  python main_mnist.py --train-classif --train-meta
+cd mce
+python main_mnist.py --train-classif --train-meta
 ```
 
 To use pretrained models:
 
 ```
-  python main_mnist.py
+cd mce
+python main_mnist.py
 ```
 <!-- Otherwise, download Pretrained Models:
 
