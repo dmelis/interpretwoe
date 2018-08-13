@@ -1,29 +1,40 @@
-import sys, os
+import os
+import sys
+import pdb
+from tqdm import tqdm
 import numpy as np
 import torch
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib import patches
+
+
 import torch.nn.functional as F
-import pdb
-from tqdm import tqdm
-
 from torch.autograd import Variable
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler, WeightedRandomSampler
 import torch.nn as nn
-
-
-sys.path.append('/home/t-daalv/pkg/faiss/python')
-import faiss # Only needed by mask mnist for fast knn search
-
-from torch.utils.data.sampler import WeightedRandomSampler
-
-from utils import plot_confusion_matrix
 
 # Torchnet (tnt) utils
 from torchnet.meter.confusionmeter import ConfusionMeter
 
 
+try:
+    sys.path.append('/home/t-daalv/pkg/faiss/python')
+    import faiss # Only needed by mask mnist for fast knn search
+except:
+    print("FAISS library not found - will note be able to retrain masking models")
+
+
+
+# Local Imports
+
+from utils import plot_confusion_matrix
+
+
+#===============================================================================
+#=================================  NETWORKS ===================================
+#===============================================================================
 
 def mnist_unnormalize(x):
     return x.clone().mul_(.3081).add_(.1307)
@@ -51,7 +62,8 @@ class MnistNet(nn.Module):
         if self.final_nonlin == 'log_sm':
             x = F.log_softmax(x, dim = 1)
         elif self.final_nonlin == 'sigmoid':
-            x = F.sigmoid(x)
+            #x = F.sigmoid(x)
+            x = torch.sigmoid(x)
         return x
 
 
@@ -76,7 +88,8 @@ class HasyNet(nn.Module):
         if self.final_nonlin == 'log_sm':
             x = F.log_softmax(x, dim = 1)
         elif self.final_nonlin == 'sigmoid':
-            x = F.sigmoid(x)
+            #x = F.sigmoid(x)
+            x = torch.sigmoid(x)
         return x
 
 class NGramCNN(nn.Module):
@@ -127,8 +140,97 @@ class NGramCNN(nn.Module):
         if self.final_nonlin == 'log_sm':
             x = F.log_softmax(x, dim = 1)
         elif self.final_nonlin == 'sigmoid':
-            x = F.sigmoid(x)
+            #x = F.sigmoid(x)
+            x = torch.sigmoid(x)
         return x
+
+
+# Make AE Model
+class FFCAE(nn.Module):
+    def __init__(self):
+        super(FFCAE, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(28 * 28, 256),
+            nn.ReLU(True),
+            nn.Linear(256, 64),
+            nn.ReLU(True))
+        self.decoder = nn.Sequential(
+            nn.Linear(64, 256),
+            nn.ReLU(True),
+            nn.Linear(256, 28 * 28),
+            nn.ReLU(True),
+            nn.Linear(28 * 28, 28 * 28),
+            nn.Hardtanh(min_val = -0.4242, max_val = 2.8215)
+            )
+
+    def forward(self, x):
+        self.e = self.encoder(x.view(-1,28*28))
+        return self.decoder(self.e).view(x.shape)
+
+    def samples_write(self, x, epoch):
+        # Writing data in a grid to check the quality and progress
+        samples = self.forward(x)
+        samples = samples.data.cpu().numpy()[:16]
+        fig = plt.figure(figsize=(4, 4))
+        gs = gridspec.GridSpec(4, 4)
+        gs.update(wspace=0.05, hspace=0.05)
+        for i, sample in enumerate(samples):
+            ax = plt.subplot(gs[i])
+            plt.axis('off')
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_aspect('equal')
+            plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
+        if not os.path.exists('out/'):
+            os.makedirs('out/')
+        plt.savefig('out/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
+
+class ConvAE(nn.Module):
+    def __init__(self):
+        super(ConvAE, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1, 16, 3, stride=3, padding=1),  # b, 16, 10, 10
+            nn.ReLU(True),
+            nn.MaxPool2d(2, stride=2),  # b, 16, 5, 5
+            nn.Conv2d(16, 8, 3, stride=2, padding=1),  # b, 8, 3, 3
+            nn.ReLU(True),
+            nn.MaxPool2d(2, stride=1)  # b, 8, 2, 2
+        )
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(8, 16, 3, stride=2),  # b, 16, 5, 5
+            nn.ReLU(True),
+            nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1),  # b, 8, 15, 15
+            nn.ReLU(True),
+            nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1),  # b, 1, 28, 28
+            nn.Hardtanh(min_val = -0.4242, max_val = 2.8215)
+        )
+
+    def forward(self, x):
+        self.e = self.encoder(x)#.view(-1,28*28))
+        return self.decoder(self.e).view(x.shape)
+
+    def samples_write(self, x, epoch):
+        samples = self.forward(x)
+        samples = samples.data.cpu().numpy()[:16]
+        fig = plt.figure(figsize=(4, 4))
+        gs = gridspec.GridSpec(4, 4)
+        gs.update(wspace=0.05, hspace=0.05)
+        for i, sample in enumerate(samples):
+            ax = plt.subplot(gs[i])
+            plt.axis('off')
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_aspect('equal')
+            plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
+        if not os.path.exists('out/'):
+            os.makedirs('out/')
+        plt.savefig('out/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
+
+
+#===============================================================================
+#======================  MODEL WRAPPERS FOR TRAINING  ==========================
+#===============================================================================
+
 
 class LSTMClassifier(nn.Module):
 
@@ -331,19 +433,6 @@ class ets_classifier(nn.Module):
                 fx.append(pred.cpu())
         return torch.cat(fx)
 
-            #
-            # #print(inputs.shape)
-            # #(x, x_lengths), y = data.text, data.label
-            # self.net.zero_grad()
-            #
-            #
-            #
-            # #print(pred_scores.shape)
-            # loss = F.cross_entropy(pred_scores, targets)
-            #
-            # loss.backward()
-            # self.optimizer.step()
-
 class image_classifier(nn.Module):
     def __init__(self, task = 'mnist', optim = 'sgd', log_interval = 10, use_cuda = False, **kwarg):
         super(image_classifier, self).__init__()
@@ -379,13 +468,9 @@ class image_classifier(nn.Module):
         return model
 
     def train(self, train_loader, test_loader, epochs = 2):
-        # Train classifier
-        #use_cuda = False
-        #device = torch.device("cuda" if use_cuda else "cpu")
         for epoch in range(1, epochs + 1):
             self.train_epoch(train_loader, epoch)
             self.test(test_loader)
-
 
     def train_epoch(self, train_loader, epoch):
         self.net.train()
@@ -405,7 +490,15 @@ class image_classifier(nn.Module):
         self.net.eval()
         test_loss = 0
         correct = 0
-        ntest = len(test_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
+        # len(test_loader.dataset is wrong if using subsetsampler!)
+        if type(test_loader.sampler) is SequentialSampler:
+            ntest = len(test_loader.dataset)
+        elif type(test_loader.sampler) is SubsetRandomSampler:
+            ntest = len(test_loader.sampler.indices)
+        else:
+            pdb.set_trace()
+            raise ValueError("Wrong sampler")
+
         with torch.no_grad():
             for data, target in test_loader:
                 data, target = data.to(self.device), target.to(self.device)
@@ -413,7 +506,6 @@ class image_classifier(nn.Module):
                 test_loss += F.nll_loss(output, target, size_average=False).item() # sum up batch loss
                 pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
                 correct += pred.eq(target.view_as(pred)).sum().item()
-                #pdb.set_trace()
 
         test_loss /= ntest
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
@@ -429,89 +521,6 @@ class image_classifier(nn.Module):
             p, pred = out.max(1)
             fx.append(pred.cpu())
         return torch.cat(fx)
-
-
-
-# Make AE Model
-class FFCAE(nn.Module):
-    def __init__(self):
-        super(FFCAE, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(28 * 28, 256),
-            nn.ReLU(True),
-            nn.Linear(256, 64),
-            nn.ReLU(True))
-        self.decoder = nn.Sequential(
-            nn.Linear(64, 256),
-            nn.ReLU(True),
-            nn.Linear(256, 28 * 28),
-            nn.ReLU(True),
-            nn.Linear(28 * 28, 28 * 28),
-            nn.Hardtanh(min_val = -0.4242, max_val = 2.8215)
-            )
-
-    def forward(self, x):
-        self.e = self.encoder(x.view(-1,28*28))
-        return self.decoder(self.e).view(x.shape)
-
-            # Writing data in a grid to check the quality and progress
-    def samples_write(self, x, epoch):
-        samples = self.forward(x)
-        samples = samples.data.cpu().numpy()[:16]
-        fig = plt.figure(figsize=(4, 4))
-        gs = gridspec.GridSpec(4, 4)
-        gs.update(wspace=0.05, hspace=0.05)
-        for i, sample in enumerate(samples):
-            ax = plt.subplot(gs[i])
-            plt.axis('off')
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_aspect('equal')
-            plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
-        if not os.path.exists('out/'):
-            os.makedirs('out/')
-        plt.savefig('out/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
-
-class ConvAE(nn.Module):
-    def __init__(self):
-        super(ConvAE, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(1, 16, 3, stride=3, padding=1),  # b, 16, 10, 10
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=2),  # b, 16, 5, 5
-            nn.Conv2d(16, 8, 3, stride=2, padding=1),  # b, 8, 3, 3
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=1)  # b, 8, 2, 2
-        )
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(8, 16, 3, stride=2),  # b, 16, 5, 5
-            nn.ReLU(True),
-            nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1),  # b, 8, 15, 15
-            nn.ReLU(True),
-            nn.ConvTranspose2d(8, 1, 2, stride=2, padding=1),  # b, 1, 28, 28
-            nn.Hardtanh(min_val = -0.4242, max_val = 2.8215)
-        )
-
-    def forward(self, x):
-        self.e = self.encoder(x)#.view(-1,28*28))
-        return self.decoder(self.e).view(x.shape)
-
-    def samples_write(self, x, epoch):
-        samples = self.forward(x)
-        samples = samples.data.cpu().numpy()[:16]
-        fig = plt.figure(figsize=(4, 4))
-        gs = gridspec.GridSpec(4, 4)
-        gs.update(wspace=0.05, hspace=0.05)
-        for i, sample in enumerate(samples):
-            ax = plt.subplot(gs[i])
-            plt.axis('off')
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.set_aspect('equal')
-            plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
-        if not os.path.exists('out/'):
-            os.makedirs('out/')
-        plt.savefig('out/{}.png'.format(str(epoch).zfill(3)), bbox_inches='tight')
 
 
 class mnist_autoencoder():
@@ -952,10 +961,15 @@ class masked_image_classifier():
             return Freqs
 
 
-    def _get_reference_data(self, train_loader):
+    def _get_reference_data(self,loader):
         if self.task == 'mnist':
-            X_full = (train_loader.dataset.train_data/255).numpy().astype('float32')
-            Y_full = train_loader.dataset.train_labels.numpy()
+            pdb.set_trace()
+            if loader.dataset.train:
+                X_full = (loader.dataset.train_data/255).numpy().astype('float32')
+                Y_full = loader.dataset.train_labels.numpy()
+            else:
+                X_full = (loader.dataset.test_data/255).numpy().astype('float32')
+                Y_full = loader.dataset.test_labels.numpy()
         if self.task == 'hasy':
             X_full, Y_full = self.X, self.Y
         return X_full, Y_full
@@ -1012,7 +1026,14 @@ class masked_image_classifier():
         W, H   = self.image_size
         w, h   = self.mask_size
 
-        ntest = len(test_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
+        if type(test_loader.sampler) is SequentialSampler:
+            ntest = len(test_loader.dataset)
+        elif type(test_loader.sampler) is SubsetRandomSampler:
+            ntest = len(test_loader.sampler.indices)
+        else:
+            pdb.set_trace()
+            raise ValueError("Wrong sampler")
+        #ntest = len(test_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
 
         with torch.no_grad():
             for data, target in test_loader:

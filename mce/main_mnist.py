@@ -17,6 +17,13 @@ import torch.utils.data.dataloader as dataloader
 import matplotlib
 matplotlib.use('Agg')
 
+
+# Local Imports
+from models import image_classifier
+from models import masked_image_classifier
+from utils import generate_dir_names
+
+
 def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size = 64,
                     num_workers = 1):
     """
@@ -52,25 +59,34 @@ def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size =
     return train_loader, valid_loader, test_loader, train, test
 
 def parse_args():
-
-    #senn_parser = get_senn_parser()
-    # [args_senn, extra_args] = senn_parser.parse_known_args()
-
-    #
     ### Local ones
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on MNIST')
 
-  #setup
-    #parser.add_argument('--train', action='store_true', default=True, help='Whether or not to train model')
-    parser.add_argument('--train', action='store_true', default=False, help='Whether or not to train model')
+    parser.add_argument('--train-classif', action='store_true', default=False, help='Whether or not to (re)train classifier model')
+    parser.add_argument('--train-meta', action='store_true', default=False, help='Whether or not to (re)train meta masking model')
 
-    parser.add_argument('--test', action='store_true', default=False, help='Whether or not to run model on test set')
-    parser.add_argument('--load_model', action='store_true', default=False, help='Load pretrained model from default path')
+    #parser.add_argument('--test', action='store_true', default=False, help='Whether or not to run model on test set')
+    #parser.add_argument('--load_model', action='store_true', default=False, help='Load pretrained model from default path')
 
+    # Meta-learner
+    parser.add_argument('--attrib_type', type=str, choices = ['overlapping'],
+                            default='overlapping', help='type of attribute')
+    parser.add_argument('--attrib_width', type=int, default=7, help='width of attribute region [default: 7]')
+    parser.add_argument('--attrib_height', type=int, default=7, help='height of attribute region [default: 7]')
+    parser.add_argument('--attrib_padding', type=int, default=4, help='Padding around input image to define attributes')
+
+    # Explainer
+    parser.add_argument('--mce_reg_type', type=str, choices = ['exp', 'quadratic'],
+                            default='exp', help='Type of regularization for explainer scoring function objective')
+    parser.add_argument('--mce_alpha', type=float,
+                            default=1.0, help='Alpha parameter for explainer scoring function')
+    parser.add_argument('--mce_p', type=int, default=2, help='P power for explainer scoring function')
+    parser.add_argument('--mce_plottype', type=str, choices = ['treemap', 'bar'],
+                            default='treemap', help='Plot type of class entailment diagram')
     # device
     parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu' )
-    parser.add_argument('--num_gpus', type=int, default=1, help='Num GPUs to use.')
+    #parser.add_argument('--num_gpus', type=int, default=1, help='Num GPUs to use.')
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode' )
 
     # learning
@@ -97,11 +113,6 @@ def parse_args():
 
     args = parser.parse_args()
 
-    # # update args and print
-    # args.filters = [int(k) for k in args.filters.split(',')]
-    # if args.objective == 'mse':
-    #     args.num_class = 1
-
     print("\nParameters:")
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
@@ -109,47 +120,78 @@ def parse_args():
     return args
 
 
-from models import mnist_classifier
-from models import masked_mnist_classifier
-from utils import generate_dir_names
 
 def main():
     args = parse_args()
     args.nclasses = 10
+    classes = [str(i) for i in range(10)]
+
     model_path, log_path, results_path = generate_dir_names('mnist', args)
 
-    # Load data
+    ### LOAD DATA
     train_loader, valid_loader, test_loader, train_tds, test_tds = load_mnist_data(
                         batch_size=args.batch_size,num_workers=args.num_workers
                         )
 
-    # Train or load classifier
-    if args.train or (not os.path.isfile(os.path.join(model_path, "classif.pth"))):
+    ### TRAIN OR LOAD CLASSIFICATION MODEL TO BE EXPLAINED
+    classif_path = os.path.join(model_path, "classif.pth")
+    if args.train_classif or (not os.path.isfile(classif_path)):
         print('Training classifier from scratch')
-        model = mnist_classifier(optim = args.optim, use_cuda = args.cuda)
-        model.train(train_loader, test_loader, epochs = args.epochs_classif)
-        model.save(os.path.join(model_path, "classif.pth"))
+        clf = image_classifier(task='mnist',optim = args.optim, use_cuda = args.cuda)
+        clf.train(train_loader, test_loader, epochs = args.epochs_classif)
+        clf.save(classif_path)
     else:
         print('Loading pre-trained classifier')
-        model = torch.load(os.path.join(model_path, "classif.pth"))
-        model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        clf = torch.load(classif_path)
+        clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Label training examples with mnist_classifier
-    # TODO: Before I was reloading dataset with shuffle=False. But it seems this
-    # is not necessary, since I assign it to
-    train_loader_unshuffled = dataloader.DataLoader(train_tds, shuffle=False, batch_size=args.batch_size)
-    train_pred = model.label_datatset(train_loader_unshuffled)
-    train_loader.dataset.train_labels = train_pred
 
-    # Train meta model
-    mask_size = (7,7)
-    padding = 4
-    mask_type = 'overlapping'
-    mask_model = masked_mnist_classifier(optim = args.optim, mask_type = mask_type,
-                                         padding = padding, mask_size = mask_size)
-    mask_model.train(train_loader, test_loader, epochs = args.epochs_meta)
-    mask_model.save(os.path.join(model_path, "mask_model_{}x{}.pth".format(*mask_size)))
-    #
+    ### TRAIN OR LOAD META-MODEL OF MASKED INPUTS
+    mask_size = (args.attrib_width, args.attrib_height)
+    metam_path = os.path.join(model_path, "mask_model_{}x{}.pth".format(*mask_size))
+    if args.train_meta or (not os.path.isfile(metam_path)):
+        print('Training meta masking model from scratch')
+        # Label training examples with mnist_classifier
+        # TODO: Before I was reloading dataset with shuffle=False. But it seems this
+        # is not necessary, since I assign it to
+        train_loader_unshuffled = dataloader.DataLoader(train_tds, shuffle=False, batch_size=args.batch_size)
+        train_pred = clf.label_datatset(train_loader_unshuffled)
+        train_loader.dataset.train_labels = train_pred
+
+        # Train meta model
+        mask_model = masked_image_classifier(task = 'mnist', optim = args.optim,
+                                             mask_type = args.attrib_type,
+                                             padding = args.attrib_padding, mask_size = mask_size)
+        mask_model.train(train_loader, test_loader, epochs = args.epochs_meta)
+        mask_model.save(metam_path)
+    else:
+        print('Loading pre-trained meta masking model')
+        mask_model = torch.load(metam_path)
+        mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    ### EXPLAIN SOME INSTANCES
+    Explainer = MCExplainer(clf, mask_model, classes = classes,
+                      reg_type = args.mce_reg_type,
+                      crit_alpha = args.mce_alpha,
+                      crit_p = args.mce_p,
+                      plot_type = args.mce_plottype)
+
+    # Grab a batch for experiments
+    batch_x, batch_y = next(iter(train_loader))
+    idx = 63
+    x  = batch_x[idx:idx+1]
+    print(classes[batch_y[idx].item()])
+
+    fx = classifier(x)
+    p, pred = fx.max(1)
+
+    plt.imshow(x.squeeze(), cmap='Greys')
+    plt.title('Prediction: ' + classes[pred] + ' (class no.{})'.format(pred.item()), fontsize = 20)
+    plt.xticks([])
+    plt.yticks([])
+    plt.show()
+
+    e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
 
 
 if __name__ == '__main__':
