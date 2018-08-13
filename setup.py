@@ -11,11 +11,14 @@ setup(name='mce',
       #packages= find_packages(exclude=['js', 'node_modules', 'tests']),
       install_requires=[
           'numpy',
+          'pdb',
           'scipy',
           'matplotlib',
           'tqdm',
-          'scikit-learn>=0.18',
-          'scikit-image>=0.12'
+          #'scikit-learn>=0.18',
+          #'scikit-image>=0.12',
+          'shapely',
+          'squarify'
       ],
       include_package_data=True,
       zip_safe=False
