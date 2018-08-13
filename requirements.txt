@@ -1,8 +1,11 @@
 # Models
-pytorch
-torchtext
+#pytorch
 
 # Progress bars on iterators
 tqdm
+shapely
+squarify
 
 # Optional NLP tools (needed for NLP task)
+nltk
+torchtext

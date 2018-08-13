@@ -4,6 +4,7 @@ Multistep Contrsative Explanations
 ## Dependencies
 
 #### Major:
+* python (>3.0)
 * pytorch (>4.0)
 * [faiss](https://github.com/facebookresearch/faiss) (for fast nearest neighbor search, optional -needed only if retraining mask model)
 
@@ -21,10 +22,14 @@ pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x8
 pip3 install torchvision
 ```
 
-<!-- ## Setting up
+## Setting up
 
 After cloning, do:
 ```
+pip3 install -r requirements.txt
+```
+
+<!-- ```
   python setup.py install
 ``` -->
 
