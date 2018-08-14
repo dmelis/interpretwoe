@@ -1,4 +1,7 @@
 
+# Data
+/data/
+
 # Compiled package
 build/
 dist/
@@ -6,3 +9,4 @@ dist/
 
 # Python complied
 *.pyc
+*__pycache__*

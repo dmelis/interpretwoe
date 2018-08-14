@@ -23,11 +23,17 @@ pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x8
 pip3 install torchvision
 ```
 
-## Setting up
-
+## Install
 After cloning, do:
 ```
 pip3 install -r requirements.txt
+```
+
+## Data preparation:
+
+#### Hasy
+```
+./process_hasy.sh
 ```
 
 <!-- ```
