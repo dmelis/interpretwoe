@@ -31,10 +31,15 @@ pip3 install -r requirements.txt
 
 ## Data preparation:
 
-#### Hasy
+Invoke the makefile with dataset argument:
+
 ```
-./process_hasy.sh
+make hasy
+make ets
+make leafsnap
 ```
+
+Or generate all of them with `make all`
 
 <!-- ```
   python setup.py install

@@ -37,8 +37,8 @@ def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size =
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])
 
-    train = MNIST('../../data/MNIST', train=True, download=True, transform=transform)
-    test  = MNIST('../../data/MNIST', train=False, download=True, transform=transform)
+    train = MNIST('../data/MNIST', train=True, download=True, transform=transform)
+    test  = MNIST('../data/MNIST', train=False, download=True, transform=transform)
 
     num_train = len(train)
     indices = list(range(num_train))
@@ -68,9 +68,6 @@ def parse_args():
 
     parser.add_argument('--train-classif', action='store_true', default=False, help='Whether or not to (re)train classifier model')
     parser.add_argument('--train-meta', action='store_true', default=False, help='Whether or not to (re)train meta masking model')
-
-    #parser.add_argument('--test', action='store_true', default=False, help='Whether or not to run model on test set')
-    #parser.add_argument('--load_model', action='store_true', default=False, help='Load pretrained model from default path')
 
     # Meta-learner
     parser.add_argument('--attrib_type', type=str, choices = ['overlapping'],
@@ -137,12 +134,13 @@ def main():
     if args.train_classif or (not os.path.isfile(classif_path)):
         print('Training classifier from scratch')
         clf = image_classifier(task='mnist',optim = args.optim, use_cuda = args.cuda)
-        clf.train(train_loader, test_loader, epochs = args.epochs_classif)
+        clf.train(train_loader, valid_loader, epochs = args.epochs_classif)
         clf.save(classif_path)
     else:
         print('Loading pre-trained classifier')
         clf = image_classifier.load(classif_path)
         clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    clf.test(test_loader)
 
     ### TRAIN OR LOAD META-MODEL OF MASKED INPUTS
     mask_size = (args.attrib_width, args.attrib_height)

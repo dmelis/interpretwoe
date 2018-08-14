@@ -436,12 +436,16 @@ class ets_classifier(nn.Module):
 class image_classifier(nn.Module):
     def __init__(self, task = 'mnist', optim = 'sgd', log_interval = 10, use_cuda = False, **kwarg):
         super(image_classifier, self).__init__()
+        self.device_type = "gpu" if torch.cuda.is_available() else "cpu"
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.log_interval = log_interval
         if task == 'mnist':
             self.net = MnistNet().to(self.device)
         elif task == 'hasy':
             self.net = HasyNet().to(self.device)
+        elif task == 'leafsnap':
+            self.net = HasyNet(nclasses=185).to(self.device)
+
         if optim == 'adam':
             self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001, weight_decay=1e-5)
 
@@ -452,7 +456,7 @@ class image_classifier(nn.Module):
         # Hack - serialization of torch.device is very recent https://github.com/pytorch/pytorch/pull/7713
         device = self.device
         self.device = None
-        fname = path + '.gpu' if self.device_str == 'gpu' else '' + '.pth'
+        fname = path + '.gpu' if self.device_type == 'gpu' else '' + '.pth'
         torch.save(self, open(fname, 'wb'))
         self.device = device
         print('Saved!')
