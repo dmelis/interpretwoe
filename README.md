@@ -47,17 +47,14 @@ Or generate all of them with `make all`
 
 ## How to use
 
-To train models from sratch:
+To train models from scratch:
 ```
-cd mce
-python main_mnist.py --train-classif --train-meta
+python src/main_mnist.py --train-classif --train-meta
 ```
 
 To use pretrained models:
-
 ```
-cd mce
-python main_mnist.py
+python src/main_mnist.py
 ```
 <!-- Otherwise, download Pretrained Models:
 
