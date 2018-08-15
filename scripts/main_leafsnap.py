@@ -11,6 +11,7 @@ if matplotlib.get_backend() == 'Qt5Agg':
 import torch
 
 # Local Imports
+import src
 from src.models import image_classifier,  masked_image_classifier
 from src.utils import generate_dir_names
 from src.utils import SubsetDeterministicSampler

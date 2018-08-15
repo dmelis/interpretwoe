@@ -918,7 +918,7 @@ class masked_image_classifier():
             # Overlapping squares
             self.I = list(range(self.padding, self.image_size[0] - self.mask_size[0]- self.padding))
             self.J = list(range(self.padding, self.image_size[1] - self.mask_size[1] - self.padding))
-        print('I,J:', self.I, self.J)
+        #print('I,J:', self.I, self.J)
 
     def __call__(self, x):
         return self.net(x)
@@ -935,11 +935,6 @@ class masked_image_classifier():
 
     @staticmethod
     def load(path):
-        # if 'gpu' in path:
-        #     model = torch.load(path,
-        #                 map_location=lambda storage, location: storage)
-        # else:
-        #     model = torch.load(path)
         model = torch.load(path,
                     map_location=lambda storage, location: storage)
         dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -988,7 +983,6 @@ class masked_image_classifier():
         if Idxs.shape[0] < Idxs.shape[1]:
             # If # rows is too small, can't slice Y for some reason. Add dummy rows.
             diff = 30
-            #pdb.set_trace()
             Classes = Y[np.vstack((Idxs,np.zeros((diff, self.knn), dtype=int)))][:Idxs.shape[0],:]
         else:
             Classes = Y[Idxs]
@@ -1019,8 +1013,6 @@ class masked_image_classifier():
         self.net.train()
 
         X_full, Y_full = self._get_reference_data(train_loader)
-            #X_full = (train_loader.dataset.train_data/255).numpy().astype('float32')
-            #Y_full = train_loader.dataset.train_labels
         W, H   = self.image_size
         w, h   = self.mask_size
 
