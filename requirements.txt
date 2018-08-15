@@ -1,12 +1,12 @@
 # Models
-#pytorch
+#pytorch # Install manually!
 
 # Necessary
 matplotlib
 tqdm
 shapely
 squarify
-
+torchnet
 
 # Optional NLP tools (needed for NLP task)
 nltk

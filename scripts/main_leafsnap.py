@@ -68,9 +68,9 @@ def parse_args():
     parser.add_argument('--objective', default='cross_entropy', help='choose which loss objective to use')
 
     #paths
-    parser.add_argument('--model_path', type=str, default='../checkpoints', help='where to save the snapshot')
-    parser.add_argument('--results_path', type=str, default='../out', help='where to dump model config and epoch stats')
-    parser.add_argument('--log_path', type=str, default='../log', help='where to dump training logs  epoch stats (and config??)')
+    parser.add_argument('--model_path', type=str, default='models', help='where to save the snapshot')
+    parser.add_argument('--results_path', type=str, default='src/out', help='where to dump model config and epoch stats')
+    parser.add_argument('--log_path', type=str, default='src/log', help='where to dump training logs  epoch stats (and config??)')
 
     # data loading
     parser.add_argument('--num_workers' , type=int, default=4, help='num workers for data loader')

@@ -1,15 +1,18 @@
-import torch
 import numpy as np
-from IPython.display import clear_output
-import pdb
-
-
+from functools import partial
 import signal
 import time
+import pdb
+import torch
+
 
 import matplotlib.pyplot as plt
 
-from functools import partial
+try:
+    from IPython.display import clear_output
+except ImportError:
+    pass # or set "
+
 
 # Local
 from .utils import detect_kernel

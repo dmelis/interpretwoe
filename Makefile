@@ -13,8 +13,8 @@ leafsnap := data/processed/leafsnap
 all: hasy ets leafsnap
 
 clean_hasy:
-	rm -rf data/raw/hasy/*
-	rm -rf data/processed/hasy/*
+	rm -rf data/raw/hasy/
+	rm -rf data/processed/hasy/
 
 clean_leafsnap:
 	rm -rf data/raw/leafsnap/*
@@ -28,13 +28,14 @@ $(hasy):
 	mkdir -p data/raw/hasy data/processed/hasy
 	wget $(HASY_URL) -P data/raw/hasy
 	tar -xvjf data/raw/hasy/HASYv2.tar.bz2 --directory data/raw/hasy/
-	./process_hasy.sh
+	scripts/process_hasy.sh
+	cp data/raw/hasy/symbols.csv data/processed/hasy/
 
 $(leafsnap):
 	mkdir -p data/raw/leafsnap# data/processed/leafsnap
-	#wget $(LEAF_URL) -P data/raw/leafsnap
+	wget $(LEAF_URL) -P data/raw/leafsnap
 	tar -xvf data/raw/leafsnap/leafsnap-dataset.tar --directory data/raw/leafsnap/
-	./process_leafsnap.sh
+	scripts/process_leafsnap.sh
 
 hasy: $(hasy)
 
