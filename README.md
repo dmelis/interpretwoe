@@ -49,12 +49,12 @@ Or generate all of them with `make all`
 
 To train models from scratch:
 ```
-python src.main_mnist --train-classif --train-meta
+python scripts.main_mnist --train-classif --train-meta
 ```
 
 To use pretrained models:
 ```
-python src.main_mnist.py
+python scripts.main_mnist
 ```
 <!-- Otherwise, download Pretrained Models:
 
