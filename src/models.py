@@ -891,15 +891,15 @@ class masked_image_classifier():
         self.task = task
         self.X, self.Y = X, Y
         if task == 'mnist':
-            self.image_size = (28,28)
+            self.input_size = (28,28)
             self.net = MnistNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 10
         elif task == 'hasy':
-            self.image_size = (32,32)
+            self.input_size = (32,32)
             self.net = HasyNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 369
         elif task == 'leafsnap':
-            self.image_size = (128,128)
+            self.input_size = (128,128)
             self.net = LeafNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 185
         else:
@@ -912,12 +912,12 @@ class masked_image_classifier():
         # I, J contain valid left and top init pixels
         if mask_type == 'disjoint':
             # Partition input into equallty sized, disjoint squares
-            self.I = list(range(0, self.image_size[0], mask_size[0]))
-            self.J = list(range(0, self.image_size[1], mask_size[1]))
+            self.I = list(range(0, self.input_size[0], mask_size[0]))
+            self.J = list(range(0, self.input_size[1], mask_size[1]))
         elif mask_type == 'overlapping':
             # Overlapping squares
-            self.I = list(range(self.padding, self.image_size[0] - self.mask_size[0]- self.padding))
-            self.J = list(range(self.padding, self.image_size[1] - self.mask_size[1] - self.padding))
+            self.I = list(range(self.padding, self.input_size[0] - self.mask_size[0]- self.padding))
+            self.J = list(range(self.padding, self.input_size[1] - self.mask_size[1] - self.padding))
         #print('I,J:', self.I, self.J)
 
     def __call__(self, x):
@@ -954,7 +954,7 @@ class masked_image_classifier():
         """
             Randomly sample a rectangular mask
         """
-        W, H   = self.image_size
+        W, H   = self.input_size
         w, h   = self.mask_size
         i = np.random.choice(self.I)
         j = np.random.choice(self.J)
@@ -971,7 +971,7 @@ class masked_image_classifier():
             - X should be unnormalized, mask will, be applied directly
             - X_s should be masked and unnormalized
         """
-        W, H = self.image_size
+        W, H = self.input_size
         index = faiss.IndexFlatL2(W*H)   # build the index
         #pdb.set_trace()
         if self.device.type == 'cuda':
@@ -1013,7 +1013,7 @@ class masked_image_classifier():
         self.net.train()
 
         X_full, Y_full = self._get_reference_data(train_loader)
-        W, H   = self.image_size
+        W, H   = self.input_size
         w, h   = self.mask_size
 
         ntrain = len(train_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
@@ -1057,7 +1057,7 @@ class masked_image_classifier():
 
         # FIXME: DO we really need test_loader here? FOr hasy, I'm using same
         X_full, Y_full = self._get_reference_data(test_loader)
-        W, H   = self.image_size
+        W, H   = self.input_size
         w, h   = self.mask_size
 
         if type(test_loader.sampler) is SequentialSampler:
@@ -1105,7 +1105,7 @@ class masked_image_classifier():
         self.samples_write(data, S, X_s, mask, output, target, epoch, X_full, Y_full)
 
     def samples_write(self, x, S, xs, mask, pred, target, epoch, X_full = None, Y_full = None):
-        W, H   = self.image_size
+        W, H   = self.input_size
         w, h   = self.mask_size
         examples = 10
         fig = plt.figure(figsize=(15, 2*examples))
@@ -1199,6 +1199,7 @@ class masked_text_classifier():
         self.vocab = vocab
         self.langs = langs
         self.nclasses = len(langs)
+        self.input_size = None # IT's variable
         # Need to pass vocab, etc to LSTM classifier
         #self.net = LSTMClassifier(self.emb_dim, hidden_dim, len(vocab), len(langs), vocab = vocab).to(self.device)
         self.net = NGramCNN(vocab = vocab, ngram = self.mask_size,
@@ -1211,12 +1212,12 @@ class masked_text_classifier():
         # I, J contain valid left and top init pixels
         # if mask_type == 'disjoint':
         #     # Partition input into equallty sized, disjoint squares
-        #     self.I = list(range(0, self.image_size[0], mask_size[0]))
-        #     self.J = list(range(0, self.image_size[1], mask_size[1]))
+        #     self.I = list(range(0, self.input_size[0], mask_size[0]))
+        #     self.J = list(range(0, self.input_size[1], mask_size[1]))
         # elif mask_type == 'overlapping':
         #     # Overlapping squares
-        #     self.I = list(range(self.padding, self.image_size[0] - self.mask_size[0]- self.padding))
-        #     self.J = list(range(self.padding, self.image_size[1] - self.mask_size[1] - self.padding))
+        #     self.I = list(range(self.padding, self.input_size[0] - self.mask_size[0]- self.padding))
+        #     self.J = list(range(self.padding, self.input_size[1] - self.mask_size[1] - self.padding))
         # print('I,J:', self.I, self.J)
 
     def __call__(self, x):
@@ -1356,7 +1357,7 @@ class masked_text_classifier():
         #self.samples_write(data, S, X_s, mask, output, target, epoch, X_full, Y_full)
 
     def samples_write(self, x, S, xs, mask, pred, target, epoch, X_full = None, Y_full = None):
-        W, H   = self.image_size
+        W, H   = self.input_size
         w, h   = self.mask_size
         examples = 10
         fig = plt.figure(figsize=(15, 2*examples))

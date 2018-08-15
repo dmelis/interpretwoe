@@ -266,13 +266,16 @@ class MCExplainer(object):
         self.crit_alpha = crit_alpha
         self.crit_p     = crit_p
         self.task       = mask_model.task
+        #self.input_size = mask_model.input_size
+        self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
         #self.pykernel   = detect_kernel()
 
 
         if self.task == 'mnist':
             self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
         elif self.task in ['hasy', 'leafsnap']:
-            self.masker = image_masker_unnormalized #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)    )
+            H, W = self.input_size
+            self.masker = partial(image_masker_unnormalized, H=H, W=W)# #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)    )
         elif self.task == 'ets':
             self.masker = ets_masker
         else:

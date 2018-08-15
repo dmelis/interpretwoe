@@ -16,17 +16,28 @@ Multistep Contrsative Explanations
 * shapely
 * squarify
 
+## Installation
+
+It's highly recommended that the following steps be done **inside a virtual environment** (e.g., via `virtualenv` or `anaconda`).
+
+
+#### Install prereqs
+
 Installing Pytorch. Find approriate version download link [here](https://pytorch.org/) e.g.:
 
 ```
 pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x86_64.whl
 pip3 install torchvision
 ```
-
-## Install
-After cloning, do:
+Then install remaining dependencies
 ```
 pip3 install -r requirements.txt
+```
+Finally, install this package
+```
+git clone git@github.com:dmelis/mce.git
+cd mce
+pip3 install ./
 ```
 
 ## Data preparation:

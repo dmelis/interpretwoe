@@ -143,7 +143,7 @@ def main():
     x  = batch_x[idx:idx+1]
     print(classes[batch_y[idx].item()])
 
-    e = Explainer.explain(x, verbose = 0 , show_plot = 1)
+    e = Explainer.explain(x, verbose = 0 , show_plot = 2)
 
 
 if __name__ == '__main__':
