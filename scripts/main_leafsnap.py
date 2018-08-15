@@ -4,41 +4,28 @@ import pdb
 import pickle
 import argparse
 import operator
-
-import torch
-from torch.utils.data import TensorDataset
-from torch.autograd import Variable
-import torchvision
-from torchvision import transforms
-from torchvision.datasets import MNIST
-from torch.utils.data.sampler import SubsetRandomSampler
-import torch.utils.data.dataloader as dataloader
-
 import matplotlib
 if matplotlib.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     matplotlib.use('Agg')
-
+import torch
 
 # Local Imports
-from src.models import image_classifier
-from src.models import masked_image_classifier
+from src.models import image_classifier,  masked_image_classifier
 from src.utils import generate_dir_names
-#from mce import MCExplainer
+from src.utils import SubsetDeterministicSampler
 from src.explainers import MCExplainer
-from src.datasets import load_leafsnap_data
-
+from src.datasets import load_leafsnap_data, load_full_dataset
 
 def parse_args():
     ### Local ones
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on MNIST')
 
-    parser.add_argument('--train-classif', action='store_true', default=False, help='Whether or not to (re)train classifier model')
-    parser.add_argument('--train-meta', action='store_true', default=False, help='Whether or not to (re)train meta masking model')
-
-    #parser.add_argument('--test', action='store_true', default=False, help='Whether or not to run model on test set')
-    #parser.add_argument('--load_model', action='store_true', default=False, help='Load pretrained model from default path')
+    parser.add_argument('--train-classif', action='store_true', default=False,
+                        help='Whether or not to (re)train classifier model')
+    parser.add_argument('--train-meta', action='store_true', default=False,
+                        help='Whether or not to (re)train meta masking model')
 
     # Meta-learner
     parser.add_argument('--attrib_type', type=str, choices = ['overlapping'],
@@ -120,15 +107,18 @@ def main():
     metam_path = os.path.join(model_path, "mask_model_{}x{}.pth".format(*mask_size))
     if args.train_meta or (not os.path.isfile(metam_path)):
         print('Training meta masking model from scratch')
-        # Label training examples with mnist_classifier
-        # TODO: Before I was reloading dataset with shuffle=False. But it seems this
-        # is not necessary, since I assign it to
-        train_loader_unshuffled = dataloader.DataLoader(train_tds, shuffle=False, batch_size=args.batch_size)
-        train_pred = clf.label_datatset(train_loader_unshuffled)
-        train_loader.dataset.train_labels = train_pred
+        # Label all examples with the classifierself.
+        # I could not find an easy way to label only the train data,
+        # but it seems it doesn't matter, labels for others wont' be used anyway)
+        train_idx = sorted(train_loader.sampler.indices)
+        dataloader_args = dict(batch_size=1000, num_workers=0, shuffle = False)
+        dummy_loader =  torch.utils.data.dataloader.DataLoader(dataset,
+                    sampler=SubsetDeterministicSampler(train_idx), **dataloader_args)
 
-        # Train meta model
-        mask_model = masked_image_classifier(task = 'leafsnap', optim = args.optim,
+        # Get reference examples for nearest neighbor computation in masked classifier
+        X_full, Y_full = load_full_dataset(dummy_loader, to_numpy=True, max_examples = 20000)
+        mask_model = masked_image_classifier(task = 'leafsnap', X = X_full, Y = Y_full,
+                                             optim = args.optim,
                                              mask_type = args.attrib_type,
                                              padding = args.attrib_padding,
                                              mask_size = mask_size)

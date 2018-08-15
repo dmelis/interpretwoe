@@ -23,15 +23,20 @@ def parse_args():
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on MNIST')
 
-    parser.add_argument('--train-classif', action='store_true', default=False, help='Whether or not to (re)train classifier model')
-    parser.add_argument('--train-meta', action='store_true', default=False, help='Whether or not to (re)train meta masking model')
+    parser.add_argument('--train-classif', action='store_true', default=False,
+                        help='Whether or not to (re)train classifier model')
+    parser.add_argument('--train-meta', action='store_true', default=False,
+                        help='Whether or not to (re)train meta masking model')
 
     # Meta-learner
     parser.add_argument('--attrib_type', type=str, choices = ['overlapping'],
-                            default='overlapping', help='type of attribute')
-    parser.add_argument('--attrib_width', type=int, default=7, help='width of attribute region [default: 7]')
-    parser.add_argument('--attrib_height', type=int, default=7, help='height of attribute region [default: 7]')
-    parser.add_argument('--attrib_padding', type=int, default=4, help='Padding around input image to define attributes')
+                        default='overlapping', help='type of attribute')
+    parser.add_argument('--attrib_width', type=int, default=7,
+                        help='width of attribute region [default: 7]')
+    parser.add_argument('--attrib_height', type=int, default=7,
+                        help='height of attribute region [default: 7]')
+    parser.add_argument('--attrib_padding', type=int, default=4,
+                        help='Padding around input image to define attributes')
 
     # Explainer
     parser.add_argument('--mce_reg_type', type=str, choices = ['exp', 'quadratic'],
@@ -54,9 +59,9 @@ def parse_args():
     parser.add_argument('--objective', default='cross_entropy', help='choose which loss objective to use')
 
     #paths
-    parser.add_argument('--model_path', type=str, default='../models/', help='where to save the snapshot')
-    parser.add_argument('--results_path', type=str, default='out', help='where to dump model config and epoch stats')
-    parser.add_argument('--log_path', type=str, default='log', help='where to dump training logs  epoch stats (and config??)')
+    parser.add_argument('--model_path', type=str, default='models/', help='where to save the snapshot')
+    parser.add_argument('--results_path', type=str, default='src/out', help='where to dump model config and epoch stats')
+    parser.add_argument('--log_path', type=str, default='src/log', help='where to dump training logs  epoch stats (and config??)')
 
     # data loading
     parser.add_argument('--num_workers' , type=int, default=4, help='num workers for data loader')

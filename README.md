@@ -6,9 +6,9 @@ Multistep Contrsative Explanations
 #### Major:
 * python (>3.0)
 * pytorch (>4.0)
-* [faiss](https://github.com/facebookresearch/faiss) (for fast nearest neighbor search, optional -needed only if retraining mask model)
+* (OPTIONAL) [faiss](https://github.com/facebookresearch/faiss) (for fast nearest neighbor search, needed only if retraining mask model)
 
-#### Minor:
+#### Minor
 * numpy
 * matplotlib
 * nltk (needed only for text applications)
@@ -31,12 +31,11 @@ pip3 install -r requirements.txt
 
 ## Data preparation:
 
-Invoke the makefile with dataset argument:
+Invoke the makefile with the desired dataset as argument (options currently supported: [`mnist`, `hasy`,`leafsnap`]), e.g.:
 
 ```
 make hasy
-make ets
-make leafsnap
+
 ```
 
 Or generate all of them with `make all`

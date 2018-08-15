@@ -180,7 +180,7 @@ def mnist_masker(x, S, H = 28, W = 28):
     return X_input, X_plot
 
 
-def hasy_masker(x, S, H = 32, W = 32):
+def image_masker_unnormalized(x, S, H = 32, W = 32):
     """
         Should work for other tasks where we don't prenormalize. Considering renaming
         to something more general.
@@ -271,26 +271,12 @@ class MCExplainer(object):
 
         if self.task == 'mnist':
             self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
-        elif self.task == 'hasy':
-            self.masker = hasy_masker #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)
-            # self.attrib_optimizer = partial(optimize_over_rectangle_attributes,
-            #
-            #                                 )
+        elif self.task in ['hasy', 'leafsnap']:
+            self.masker = image_masker_unnormalized #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)    )
         elif self.task == 'ets':
             self.masker = ets_masker
-            #self.attrib_optimizer = partial()
-                        # optimize_over_attributes(
-                        #                             self.mask_model, self.criterion, self.masker,
-                        #                             x, V=V, tgt_classes = [2,3,4], sort_hist = False,
-                        #                             show_plot = show_plot, plot_type = self.plot_type,
-                        #                             loss = self.loss_type, class_names = self.classes,
-                        #                             force_include_class = y, verbose = max(0, verbose -1)
-                        #                             )
         else:
             raise ValueError('Unrecognized task.')
-
-
-
         self.criterion = self._init_criterion()
 
 
@@ -362,7 +348,7 @@ class MCExplainer(object):
                 print(V)
             #pdb.set_trace()
             #max_S, max_C, hist_V = # Once attrib_optimizer is created at init with partial: self.attrib_optimizer(x, V, show_plot = show_plot, verbose = max(0, verbose-1))
-            if self.task in ['mnist', 'hasy']:
+            if self.task in ['mnist', 'hasy', 'leafsnap']:
                 max_S, max_C, hist_V = self.optimize_over_rectangle_attributes(
                                         self.mask_model, self.criterion, self.masker,
                                         x, y, V=V, tgt_classes = [2,3,4], sort_hist = False,

@@ -1,5 +1,7 @@
 import os
+from tqdm import tqdm
 import numpy as np
+import torch
 import torchvision
 from torchvision.datasets import MNIST
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -26,10 +28,6 @@ def load_hasy_data(data_dir, splits=(0.1,0.1), shuffle=True, random_seed=2008, b
     """
         We return train and test for plots and post-training experiments
     """
-    # transform = transforms.Compose([
-    #                        transforms.ToTensor(),
-    #                        transforms.Normalize((0.1307,), (0.3081,))
-    #                    ])
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Grayscale(num_output_channels=1),
         torchvision.transforms.Resize(size=(32, 32)),
@@ -87,9 +85,9 @@ def load_mnist_data(valid_size=0.1, shuffle=True, random_seed=2008, batch_size =
         We return train and test for plots and post-training experiments
     """
     transform = torchvision.transforms.Compose([
-                           torchvision.transforms.ToTensor(),
-                          torchvision.transforms.Normalize((0.1307,), (0.3081,))
-                       ])
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.1307,), (0.3081,))
+    ])
 
     train = MNIST('data/processed/MNIST', train=True, download=True, transform=transform)
     test  = MNIST('data/processed/MNIST', train=False, download=True, transform=transform)
@@ -161,3 +159,27 @@ def load_leafsnap_data(data_dir, splits=(0.1,0.1), shuffle=True, random_seed=200
 
 
     return train_loader, valid_loader, test_loader, data#, sym2idx, idx2sym
+
+def load_full_dataset(loader, to_numpy = False, max_examples = None):
+    print('Loading and stacking image data....')
+    X_full, Y_full = [], []
+    tot = 0
+    for batch_idx, (data, target) in enumerate(tqdm(loader)):
+        #print(batch_idx)
+        X_full.append(data)
+        Y_full.append(target)
+        tot += data.shape[0]
+        # if max_examples and (tot > max_examples):
+        #     break
+    if to_numpy:
+        X_full = torch.cat(X_full).numpy().astype('float32')
+        Y_full = torch.cat(Y_full).numpy()
+    else:
+        X_full = torch.cat(X_full)
+        Y_full = torch.cat(Y_full)
+    if max_examples:
+        idxs = torch.randperm(X_full.shape[0])[:max_examples]
+        print(idxs[:10])
+        X_full = X_full[idxs]
+        Y_full = Y_full[idxs]
+    return X_full, Y_full

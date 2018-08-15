@@ -2,6 +2,9 @@
 # Data
 /data/
 
+# Models
+/models/
+
 # Results
 src/out
 src/log

@@ -445,6 +445,8 @@ class image_classifier(nn.Module):
             self.net = HasyNet().to(self.device)
         elif task == 'leafsnap':
             self.net = HasyNet(nclasses=185).to(self.device)
+        else:
+            raise ValueError("Unrecoginzed task in image_classifier")
 
         if optim == 'adam':
             self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001, weight_decay=1e-5)
@@ -456,7 +458,7 @@ class image_classifier(nn.Module):
         # Hack - serialization of torch.device is very recent https://github.com/pytorch/pytorch/pull/7713
         device = self.device
         self.device = None
-        fname = path + '.gpu' if self.device_type == 'gpu' else '' + '.pth'
+        fname = path #+ '.gpu' if self.device_type == 'gpu' else '' + '.pth'
         torch.save(self, open(fname, 'wb'))
         self.device = device
         print('Saved!')
@@ -869,10 +871,16 @@ class masked_image_classifier():
             self.image_size = (28,28)
             self.net = MnistNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 10
-        if task == 'hasy':
+        elif task == 'hasy':
             self.image_size = (32,32)
             self.net = HasyNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 369
+        elif task == 'leafsnap':
+            self.image_size = (32,32)
+            self.net = HasyNet(nclasses=185, final_nonlin='sigmoid').to(self.device)
+            self.nclasses = 185
+        else:
+            raise ValueError("Unrecoginzed task in image_classifier")
 
         if optim == 'adam':
             self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001, weight_decay=1e-5)
@@ -979,7 +987,8 @@ class masked_image_classifier():
             else:
                 X_full = (loader.dataset.test_data/255).numpy().astype('float32')
                 Y_full = loader.dataset.test_labels.numpy()
-        if self.task == 'hasy':
+        elif self.X is not None and self.Y is not None:
+            # Reference data has been precomputed outside this function
             X_full, Y_full = self.X, self.Y
         return X_full, Y_full
 
@@ -1003,7 +1012,7 @@ class masked_image_classifier():
             # Mask Inputs
             if self.task == 'mnist':
                 X_s = mnist_unnormalize(data)*mask.view(1,1,W,H).repeat(data.shape[0], 1, 1, 1)
-            elif self.task == 'hasy':
+            elif self.task in ['hasy','leafsnap']:
                 X_s = data*mask.view(1,1,W,H).repeat(data.shape[0], 1, 1, 1)
 
             # Compute Nearest neighbors with this mask
@@ -1013,7 +1022,7 @@ class masked_image_classifier():
             #pdb.set_trace()
             if self.task == 'mnist':
                 output = self.net(mnist_normalize(X_s))
-            elif self.task == 'hasy':
+            elif self.task in ['hasy','leafsnap']:
                 output = self.net(X_s)
 
             loss = F.binary_cross_entropy(output, target)
@@ -1054,7 +1063,7 @@ class masked_image_classifier():
                 # Mask Inputs
                 if self.task == 'mnist':
                     X_s = mnist_unnormalize(data)*mask.view(1,1,W,H).repeat(data.shape[0], 1, 1, 1)
-                elif self.task == 'hasy':
+                elif self.task in ['hasy','leafsnap']:
                     X_s = data*mask.view(1,1,W,H).repeat(data.shape[0], 1, 1, 1)
 
                 #pdb.set_trace()
@@ -1065,7 +1074,7 @@ class masked_image_classifier():
                 #pdb.set_trace()
                 if self.task == 'mnist':
                     output = self.net(mnist_normalize(X_s))
-                elif self.task == 'hasy':
+                elif self.task in ['hasy','leafsnap']:
                     output = self.net(X_s)
                 #loss = F.binary_cross_entropy(output, target)
 
@@ -1170,8 +1179,6 @@ class masked_text_classifier():
         self.mask_type = mask_type
         self.task = task
         #self.X, self.Y = X, Y
-
-
         self.emb_dim = vocab.vectors.shape[1]
         self.hidden_dim = hidden_dim
         self.vocab = vocab

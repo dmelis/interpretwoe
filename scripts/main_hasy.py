@@ -5,10 +5,16 @@ import pickle
 import argparse
 import operator
 from tqdm import tqdm
-import matplotlib
-if matplotlib.get_backend() == 'Qt5Agg':
+import matplotlib as mpl
+if mpl.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
-    matplotlib.use('Agg')
+    mpl.use('Agg')
+# Needed to print latex symbols properly
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath,amssymb,amsthm,'
+                                        'mathrsfs,amsfonts,dsfont,wasysym,cmll,'
+                                        'stmaryrd, gensymb}'] #for \text command
+
 
 import torch
 
@@ -16,35 +22,8 @@ import torch
 from src.models import image_classifier, masked_image_classifier
 from src.utils import generate_dir_names
 from src.utils import SubsetDeterministicSampler
-#from torchvision import datasets
-from src.datasets import load_hasy_data
-
-
-
-
-def load_full_dataset(loader, to_numpy = False, max_examples = None):
-    print('Loading and stacking image data....')
-    X_full, Y_full = [], []
-    tot = 0
-    for batch_idx, (data, target) in enumerate(tqdm(loader)):
-        #print(batch_idx)
-        X_full.append(data)
-        Y_full.append(target)
-        tot += data.shape[0]
-        # if max_examples and (tot > max_examples):
-        #     break
-    if to_numpy:
-        X_full = torch.cat(X_full).numpy().astype('float32')
-        Y_full = torch.cat(Y_full).numpy()
-    else:
-        X_full = torch.cat(X_full)
-        Y_full = torch.cat(Y_full)
-    if max_examples:
-        idxs = torch.randperm(X_full.shape[0])[:max_examples]
-        print(idxs[:10])
-        X_full = X_full[idxs]
-        Y_full = Y_full[idxs]
-    return X_full, Y_full
+from src.explainers import MCExplainer
+from src.datasets import load_hasy_data, load_full_dataset
 
 def parse_args():
 
@@ -56,8 +35,10 @@ def parse_args():
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on HASY dataset')
 
-    parser.add_argument('--train-classif', action='store_true', default=False, help='Whether or not to (re)train classifier model')
-    parser.add_argument('--train-meta', action='store_true', default=False, help='Whether or not to (re)train meta masking model')
+    parser.add_argument('--train-classif', action='store_true', default=False,
+                        help='Whether or not to (re)train classifier model')
+    parser.add_argument('--train-meta', action='store_true', default=False,
+                        help='Whether or not to (re)train meta masking model')
 
     # Meta-learner
     parser.add_argument('--attrib_type', type=str, choices = ['overlapping'],
@@ -93,32 +74,7 @@ def parse_args():
 
     # data loading
     parser.add_argument('--num_workers' , type=int, default=4, help='num workers for data loader')
-    #
-    #
-    # # device
-    # parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu' )
-    # parser.add_argument('--num_gpus', type=int, default=1, help='Num GPUs to use.')
-    # parser.add_argument('--debug', action='store_true', default=False, help='debug mode' )
-    #
-    # # learning
-    # parser.add_argument('--optim', type=str, default='adam', help='optim method [default: adam]')
-    # parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
-    # #parser.add_argument('--epochs', type=int, default=10, help='number of epochs for train [default: 10]')
-    # parser.add_argument('--epochs_classif', type=int, default=10, help='number of epochs for train [default: 10]')
-    # parser.add_argument('--epochs_meta', type=int, default=10, help='number of epochs for train [default: 10]')
-    #
-    # parser.add_argument('--batch_size', type=int, default=128, help='batch size for training [default: 64]')
-    # parser.add_argument('--objective', default='cross_entropy', help='choose which loss objective to use')
-    #
-    # #paths
-    # parser.add_argument('--model_path', type=str, default='../checkpoints', help='where to save the snapshot')
-    # parser.add_argument('--results_path', type=str, default='../out', help='where to dump model config and epoch stats')
-    # parser.add_argument('--log_path', type=str, default='../log', help='where to dump training logs  epoch stats (and config??)')
-    # parser.add_argument('--summary_path', type=str, default='results/summary.csv', help='where to dump model config and epoch stats')
-    #
-    # # data loading
-    # parser.add_argument('--num_workers' , type=int, default=1, help='num workers for data loader')
-    # #####
+
 
     args = parser.parse_args()
     print("\nParameters:")
@@ -139,10 +95,12 @@ def main():
         batch_size=args.batch_size,num_workers=args.num_workers)
     print('done!')
     classes = dataset.classes
+    class_names =  [r'${}$'.format(s) for s in ind2sym]
     args.nclasses = len(dataset.classes)
 
     ### TRAIN OR LOAD CLASSIFICATION MODEL TO BE EXPLAINED
     classif_path = os.path.join(model_path, "classif.pth")
+    print(classif_path)
     if args.train_classif or (not os.path.isfile(classif_path)):
         print('Training classifier from scratch')
         clf = image_classifier(task = 'hasy', optim = args.optim, use_cuda = args.cuda)
@@ -154,21 +112,22 @@ def main():
         clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     clf.test(test_loader)
 
-    # Label all examples with the classifier (have no easy way to labeling only train,
-    # but it seems it doesn't matter, labels for others wont' be used anyway)
-    train_idx = sorted(train_loader.sampler.indices)
-    dataloader_args = dict(batch_size=1000, num_workers=0, shuffle = False)
-    dummy_loader = dataloader.DataLoader(dataset,
-                sampler=SubsetDeterministicSampler(train_idx), **dataloader_args)
-
-    # Get reference examples for nearest neighbor computation in masked classifier
-    X_full, Y_full = load_full_dataset(dummy_loader, to_numpy=True, max_examples = 20000)
 
     ### TRAIN OR LOAD META-MODEL OF MASKED INPUTS
     mask_size = (args.attrib_width, args.attrib_height)
     metam_path = os.path.join(model_path, "mask_model_{}x{}.pth".format(*mask_size))
     if args.train_meta or (not os.path.isfile(metam_path)):
         print('Training meta masking model from scratch')
+        # Label all examples with the classifierself.
+        # I could not find an easy way to label only the train data,
+        # but it seems it doesn't matter, labels for others wont' be used anyway)
+        train_idx = sorted(train_loader.sampler.indices)
+        dataloader_args = dict(batch_size=1000, num_workers=0, shuffle = False)
+        dummy_loader =  torch.utils.data.dataloader.DataLoader(dataset,
+                    sampler=SubsetDeterministicSampler(train_idx), **dataloader_args)
+
+        # Get reference examples for nearest neighbor computation in masked classifier
+        X_full, Y_full = load_full_dataset(dummy_loader, to_numpy=True, max_examples = 20000)
         mask_model = masked_image_classifier(task = 'hasy', X = X_full, Y = Y_full,
                                              optim = args.optim,
                                              mask_type = args.attrib_type,
@@ -182,7 +141,7 @@ def main():
         mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ### EXPLAIN SOME INSTANCES
-    Explainer = MCExplainer(clf, mask_model, classes = classes,
+    Explainer = MCExplainer(clf, mask_model, classes = class_names,
                       reg_type = args.mce_reg_type,
                       crit_alpha = args.mce_alpha,
                       crit_p = args.mce_p,
