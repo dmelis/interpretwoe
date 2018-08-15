@@ -37,7 +37,7 @@ Finally, install this package
 ```
 git clone git@github.com:dmelis/mce.git
 cd mce
-pip3 install ./
+pip3 install -e ./
 ```
 
 ## Data preparation:
@@ -59,12 +59,15 @@ Or generate all of them with `make all`
 
 To train models from scratch:
 ```
-python -m scripts.main_mnist --train-classif --train-meta
+python scripts.main_mnist.py --train-classif --train-meta
 ```
+<!-- ```
+python -m scripts.main_mnist --train-classif --train-meta
+``` -->
 
 To use pretrained models:
 ```
-python -m scripts.main_mnist
+python scripts/main_mnist.py
 ```
 <!-- Otherwise, download Pretrained Models:
 

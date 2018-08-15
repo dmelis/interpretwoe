@@ -1,10 +1,11 @@
 import numpy as np
 from functools import partial
+import itertools
 import signal
 import time
 import pdb
 import torch
-
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
@@ -266,8 +267,8 @@ class MCExplainer(object):
         self.crit_alpha = crit_alpha
         self.crit_p     = crit_p
         self.task       = mask_model.task
-        #self.input_size = mask_model.input_size
-        self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
+        self.input_size = mask_model.input_size
+        #self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
         #self.pykernel   = detect_kernel()
 
 
@@ -414,7 +415,7 @@ class MCExplainer(object):
 
         """
         model.net.eval()
-        H, W = model.image_size
+        H, W = model.input_size
         h, w = model.mask_size
         max_obj, max_S = float("-inf"), None
         if V is None:
@@ -439,11 +440,13 @@ class MCExplainer(object):
             nonlocal show_plot
             show_plot = min(show_plot, 1)
 
-        signal.signal(signal.SIGINT, handler)
+        #signal.signal(signal.SIGINT, handler)
 
-        for ii in range(0, W-w):
-            for jj in range(0,H-h):
+        #ij_pairs =
+        pbar = tqdm(total=(W-w)*(H-h))
+        for (ii,jj) in itertools.product(range(0, W-w),range(0,H-h)):
                 #print(ii,jj)
+                pbar.update(1)
                 S = np.s_[ii:min(ii+h,H),jj:min(jj+w,W)]
                 X_s, X_s_plot = masker(x, S)
                 output = model(X_s)
@@ -492,6 +495,7 @@ class MCExplainer(object):
                     max_obj = obj
                     max_S   = S
 
+        pbar.close()
         if max_S is None:
             print('Warning: could not find any attribute that causes the predicted class be entailed')
             return None, None
