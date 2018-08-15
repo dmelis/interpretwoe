@@ -66,6 +66,31 @@ class MnistNet(nn.Module):
             x = torch.sigmoid(x)
         return x
 
+class LeafNet(nn.Module):
+    """
+        CNN for Leafsnap dataset.
+    """
+    def __init__(self, final_nonlin = 'log_sm', nclasses = 185):
+        super(LeafNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(64*30*30, 1024)
+        self.fc2 = nn.Linear(1024, nclasses)
+        self.final_nonlin = final_nonlin
+
+    def forward(self, x):
+        x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2)) # 128 x 32 x 63 x 63
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2)) # 128 x 64 x 30 x 30
+        x = x.view(-1, 64*30*30)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
+        if self.final_nonlin == 'log_sm':
+            x = F.log_softmax(x, dim = 1)
+        elif self.final_nonlin == 'sigmoid':
+            x = torch.sigmoid(x)
+        return x
 
 class HasyNet(nn.Module):
     def __init__(self, final_nonlin = 'log_sm', nclasses = 369):
@@ -78,7 +103,6 @@ class HasyNet(nn.Module):
         self.final_nonlin = final_nonlin
 
     def forward(self, x):
-        #pdb.set_trace()
         x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2))
         x = x.view(-1, 64*6*6)
@@ -88,7 +112,6 @@ class HasyNet(nn.Module):
         if self.final_nonlin == 'log_sm':
             x = F.log_softmax(x, dim = 1)
         elif self.final_nonlin == 'sigmoid':
-            #x = F.sigmoid(x)
             x = torch.sigmoid(x)
         return x
 
@@ -444,7 +467,7 @@ class image_classifier(nn.Module):
         elif task == 'hasy':
             self.net = HasyNet().to(self.device)
         elif task == 'leafsnap':
-            self.net = HasyNet(nclasses=185).to(self.device)
+            self.net = LeafNet().to(self.device)
         else:
             raise ValueError("Unrecoginzed task in image_classifier")
 
@@ -876,8 +899,8 @@ class masked_image_classifier():
             self.net = HasyNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 369
         elif task == 'leafsnap':
-            self.image_size = (32,32)
-            self.net = HasyNet(nclasses=185, final_nonlin='sigmoid').to(self.device)
+            self.image_size = (128,128)
+            self.net = LeafNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 185
         else:
             raise ValueError("Unrecoginzed task in image_classifier")

@@ -120,14 +120,12 @@ def load_leafsnap_data(data_dir, splits=(0.1,0.1), shuffle=True, random_seed=200
     """
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Grayscale(num_output_channels=1),
-        torchvision.transforms.Resize(size=(100, 100)),
-        torchvision.transforms.Pad((18,10,0,0)),
-        torchvision.transforms.CenterCrop(75),
-        torchvision.transforms.Resize(size=(32,32)),
+        torchvision.transforms.Resize(size=(170, 170)),
+        torchvision.transforms.Pad((31,17,0,0)),
+        torchvision.transforms.CenterCrop(128),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Lambda(lambda x: 1 - x) # To invert B & W
     ])
-
 
     data = torchvision.datasets.ImageFolder(root=data_dir, transform = transform)
 

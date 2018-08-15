@@ -35,9 +35,9 @@ def parse_args():
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on HASY dataset')
 
-    parser.add_argument('--train-classif', action='store_true', default=False,
+    parser.add_argument('--train_classif', action='store_true', default=False,
                         help='Whether or not to (re)train classifier model')
-    parser.add_argument('--train-meta', action='store_true', default=False,
+    parser.add_argument('--train_meta', action='store_true', default=False,
                         help='Whether or not to (re)train meta masking model')
 
     # Meta-learner
