@@ -75,14 +75,14 @@ class LeafNet(nn.Module):
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(64*30*30, 1024)
+        self.fc1 = nn.Linear(64*14*14, 1024)
         self.fc2 = nn.Linear(1024, nclasses)
         self.final_nonlin = final_nonlin
 
     def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2)) # 128 x 32 x 63 x 63
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2)) # 128 x 64 x 30 x 30
-        x = x.view(-1, 64*30*30)
+        x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2))   # 128 x 32 x 31 x31
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2)) # 128 x 64 x 14 x 14
+        x = x.view(-1, 64*14*14)
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
@@ -91,6 +91,33 @@ class LeafNet(nn.Module):
         elif self.final_nonlin == 'sigmoid':
             x = torch.sigmoid(x)
         return x
+
+# 128x128 model
+# class LeafNet(nn.Module):
+#     """
+#         CNN for Leafsnap dataset.
+#     """
+#     def __init__(self, final_nonlin = 'log_sm', nclasses = 185):
+#         super(LeafNet, self).__init__()
+#         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+#         self.conv2_drop = nn.Dropout2d()
+#         self.fc1 = nn.Linear(64*30*30, 1024)
+#         self.fc2 = nn.Linear(1024, nclasses)
+#         self.final_nonlin = final_nonlin
+#
+#     def forward(self, x):
+#         x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2)) # 128 x 32 x 63 x 63
+#         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2)) # 128 x 64 x 30 x 30
+#         x = x.view(-1, 64*30*30)
+#         x = F.relu(self.fc1(x))
+#         x = F.dropout(x, training=self.training)
+#         x = self.fc2(x)
+#         if self.final_nonlin == 'log_sm':
+#             x = F.log_softmax(x, dim = 1)
+#         elif self.final_nonlin == 'sigmoid':
+#             x = torch.sigmoid(x)
+#         return x
 
 class HasyNet(nn.Module):
     def __init__(self, final_nonlin = 'log_sm', nclasses = 369):
