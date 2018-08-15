@@ -3,7 +3,9 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
-from live_loss import PlotLosses
+
+# Local
+from .live_loss import PlotLosses
 
 def mnist_unnormalize(x):
     return x.clone().mul_(.3081).add_(.1307)

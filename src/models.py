@@ -29,7 +29,7 @@ except:
 
 # Local Imports
 
-from utils import plot_confusion_matrix
+from .utils import plot_confusion_matrix
 
 
 #===============================================================================

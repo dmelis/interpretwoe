@@ -1,7 +1,5 @@
 import torch
 import numpy as np
-from utils import plot_2d_attrib_entailment, plot_text_attrib_entailment
-from methods import mnist_normalize, mnist_unnormalize
 from IPython.display import clear_output
 import pdb
 
@@ -14,7 +12,9 @@ import matplotlib.pyplot as plt
 from functools import partial
 
 # Local
-from utils import detect_kernel
+from .utils import detect_kernel
+from .utils import plot_2d_attrib_entailment, plot_text_attrib_entailment
+from .methods import mnist_normalize, mnist_unnormalize
 
 KERNEL=detect_kernel()
 

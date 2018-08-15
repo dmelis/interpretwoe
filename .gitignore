@@ -2,6 +2,10 @@
 # Data
 /data/
 
+# Results
+src/out
+src/log
+
 # Compiled package
 build/
 dist/
