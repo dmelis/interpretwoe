@@ -362,7 +362,7 @@ class LSTMClassifier(nn.Module):
         return tag_scores
 
 
-class ets_classifier(nn.Module):
+class text_classifier(nn.Module):
     def __init__(self, vocab, langs, optim = 'adam', log_interval = 10, use_cuda = False,
         hidden_dim = 100, dropout = 0.5, weight_decay = 1e-06, lr = 0.001,
         num_layers = 1, **kwarg):
@@ -392,13 +392,22 @@ class ets_classifier(nn.Module):
     def __call__(self, x, lengths = None):
         return self.net(x, lengths)
 
+    # @staticmethod
+    # def load(path):
+    #     if 'gpu' in path:
+    #         model = torch.load(path,
+    #                     map_location=lambda storage, location: storage)
+    #     else:
+    #         model = torch.load(path)
+    #     dev = "cuda" if torch.cuda.is_available() else "cpu"
+    #     model.device = torch.device(dev)
+    #     model.net.device_str = dev
+    #     return model
+
     @staticmethod
     def load(path):
-        if 'gpu' in path:
-            model = torch.load(path,
+        model =  torch.load(path,
                         map_location=lambda storage, location: storage)
-        else:
-            model = torch.load(path)
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         model.device = torch.device(dev)
         model.net.device_str = dev
@@ -516,10 +525,6 @@ class image_classifier(nn.Module):
 
     @staticmethod
     def load(path):
-        # if 'gpu' in path:
-        #     model = torch.load(path,
-        #                 map_location=lambda storage, location: storage)
-        # else:
         model =  torch.load(path,
                         map_location=lambda storage, location: storage)
         dev = "cuda" if torch.cuda.is_available() else "cpu"

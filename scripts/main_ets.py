@@ -15,7 +15,7 @@ import torch
 
 from src.utils import generate_dir_names
 from src.datasets import load_ets_data
-from src.models import ets_classifier, masked_text_classifier
+from src.models import text_classifier, masked_text_classifier
 from src.explainers import MCExplainer
 
 
@@ -154,7 +154,7 @@ def main():
     print(classif_path)
     if args.train_classif or (not os.path.isfile(classif_path)):
         print('Training classifier from scratch')
-        clf = ets_classifier(vocab, langs,
+        clf = text_classifier(vocab, langs,
                                weight_decay=args.weight_decay_clf,
                                hidden_dim=args.hidden_dim,
                                num_layers=args.num_layers_clf,
@@ -166,7 +166,7 @@ def main():
     else:
         print('Loading pre-trained classifier')
         #clf = #torch.load(os.path.join(model_path, "classif.pth"))
-        clf = ets_classifier.load(classif_path)
+        clf = text_classifier.load(classif_path)
         clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # NOTE: test data doesn't have labels! It's useless
     # TODO: Split train into actual val and train
