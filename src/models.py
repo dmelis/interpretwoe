@@ -410,6 +410,7 @@ class text_classifier(nn.Module):
                         map_location=lambda storage, location: storage)
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         model.device = torch.device(dev)
+        model = model.to(dev)
         model.net.device_str = dev
         return model
 
