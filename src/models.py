@@ -1265,7 +1265,7 @@ class masked_text_classifier():
         dev_str = "cuda" if torch.cuda.is_available() else "cpu"
         device =  torch.device(dev_str)
         model = torch.load(path,
-                        map_location=lambda storage, location: storage).to(device)
+                        map_location=lambda storage, location: storage)
         model.device = device
         model.net.device_str = dev_str
         return model

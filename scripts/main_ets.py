@@ -167,8 +167,8 @@ def main():
         print('Loading pre-trained classifier')
         #clf = #torch.load(os.path.join(model_path, "classif.pth"))
         clf = text_classifier.load(classif_path)
-        clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        pdb.set_trace()
+        #clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #pdb.set_trace()
     # NOTE: test data doesn't have labels! It's useless
     # TODO: Split train into actual val and train
     clf.test(test_loader)
@@ -199,7 +199,8 @@ def main():
     else:
         print('Loading pre-trained meta masking model')
         mask_model = masked_text_classifier.load(metam_path)
-        mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        pdb.set_trace()
+        #mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ### EXPLAIN SOME INSTANCES
     Explainer = MCExplainer(clf, mask_model, classes = class_names,
