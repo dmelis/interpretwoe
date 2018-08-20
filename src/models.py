@@ -406,12 +406,12 @@ class text_classifier(nn.Module):
 
     @staticmethod
     def load(path):
-        model =  torch.load(path,
-                        map_location=lambda storage, location: storage)
-        dev = "cuda" if torch.cuda.is_available() else "cpu"
-        model.device = torch.device(dev)
-        model = model.to(dev)
-        model.net.device_str = dev
+        dev_str = "cuda" if torch.cuda.is_available() else "cpu"
+        device =  torch.device(dev_str)
+        model = torch.load(path,
+                        map_location=lambda storage, location: storage).to(device)
+        model.device = device
+        model.net.device_str = dev_str
         return model
 
     def save(self, path):
@@ -1262,14 +1262,12 @@ class masked_text_classifier():
 
     @staticmethod
     def load(path):
-        if 'gpu' in path:
-            model = torch.load(path,
-                        map_location=lambda storage, location: storage)
-        else:
-            model = torch.load(path)
-        dev = "cuda" if torch.cuda.is_available() else "cpu"
-        model.device = torch.device(dev)
-        #model.net.device_str = dev
+        dev_str = "cuda" if torch.cuda.is_available() else "cpu"
+        device =  torch.device(dev_str)
+        model = torch.load(path,
+                        map_location=lambda storage, location: storage).to(device)
+        model.device = device
+        model.net.device_str = dev_str
         return model
 
     def save(self, path):
