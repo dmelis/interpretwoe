@@ -38,6 +38,7 @@ $(leafsnap):
 	scripts/process_leafsnap.sh
 
 ets:
+	mkdir -p data/processed/ets
 	pip install spacy
 	python -m spacy download en
 

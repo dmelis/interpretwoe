@@ -366,7 +366,7 @@ class text_classifier(nn.Module):
     def __init__(self, vocab, langs, optim = 'adam', log_interval = 10, use_cuda = False,
         hidden_dim = 100, dropout = 0.5, weight_decay = 1e-06, lr = 0.001,
         num_layers = 1, **kwarg):
-        super(ets_classifier, self).__init__()
+        super(text_classifier, self).__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.log_interval = log_interval
         self.emb_dim = vocab.vectors.shape[1]
