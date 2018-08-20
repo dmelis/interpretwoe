@@ -208,12 +208,17 @@ def main():
                       plot_type = args.mce_plottype)
 
     # Grab a batch for experiments
-    batch_x, batch_y = next(iter(train_loader))
-    idx = 63
+    batch = next(iter(test_loader))
+    batch_x, batch_x_lens = batch.text
+    batch_y = batch.label
+    idx = 15
+    x_len = batch_x_lens[idx:idx+1]
     x  = batch_x[idx:idx+1]
-    print(classes[batch_y[idx].item()])
-
-    e = Explainer.explain(x, verbose = 0 , show_plot = 1)
+    fx = clf(x, x_len)
+    p, pred = fx.max(1)
+    p = F.softmax(fx).max().item()
+    #print(classes[batch_y[idx].item()])
+    e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
 
 
 if __name__ == '__main__':

@@ -1313,9 +1313,9 @@ class masked_text_classifier():
         for b,i in enumerate(i_s):
             mask[b,i:i+self.mask_size].fill_(True)
         S = [range(i,i+self.mask_size) for i in i_s]
-        print(S)
-        print("Added this checkpoint to check that fill_ works!")
-        pdb.set_trace()
+        #print(S)
+        #print("Added this checkpoint to check that fill_ works!")
+        #pdb.set_trace()
         return mask, S
 
     def _get_target_histogram(self, label_freqs, grams):
