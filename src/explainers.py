@@ -234,7 +234,7 @@ class Explanation(object):
             else:
                 X_s = masked
 
-            if self.task in ['hasy', 'mnist']:
+            if self.task in ['hasy', 'mnist','leafsnap']:
                 plot_2d_attrib_entailment(
                     self.input, X_s_plot, S, C, V_prev, hist_V, plot_type=plot_type,
                     class_names = self.classes, topk = 10, #title = labstr,
@@ -248,7 +248,7 @@ class Explanation(object):
         #if self.task in ['ets']:
         plt.suptitle('Prediction: {} (class {})'.format(
                             self.classes[self.prediction], self.prediction),
-                            fontsize = 24, y = .92)
+                            fontsize = 24, y = .95)
         #fig.tight_layout(rect=[0, 0.03, 1, 0.95])
         if save_path:
             plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
@@ -498,7 +498,7 @@ class MCExplainer(object):
         pbar.close()
         if max_S is None:
             print('Warning: could not find any attribute that causes the predicted class be entailed')
-            return None, None
+            return None, None, None
 
         if KERNEL == 'terminal':
             plt.ioff()

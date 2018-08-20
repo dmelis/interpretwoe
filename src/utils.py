@@ -283,7 +283,8 @@ def plot_confusion_matrix(cm, classes,
     plt.xlabel('Predicted label')
 
 #
-def attrib_barplot(hist, C, classes, topk=10, class_names=None, ax = None, sort_bars = True, pc =None):
+def attrib_barplot(hist, C, classes, topk=10, class_names=None, ax = None,
+                   sort_bars = True, pc =None):
     if ax is None:
         ax = plt.gca()
 
@@ -304,9 +305,10 @@ def attrib_barplot(hist, C, classes, topk=10, class_names=None, ax = None, sort_
         ticklabs =  [class_names[a] for a in classes]
     else:
         ticklabs  = [str(a) for a in classes]
+    rotation = 90 if np.max(np.array([len(l) for l in ticklabs])) else 0
     bar = ax.bar(ticklabs,hist)
     ax.set_xticks(range(nbars))
-    ax.set_xticklabels(ticklabs)
+    ax.set_xticklabels(ticklabs, rotation = rotation)
     if sort_bars and not (topk < len(hist)) and (len(C) <= topk):
         # Draw separation lineself.
         #This only makes sense if (i) histogram is shown sorted, |C| < topk

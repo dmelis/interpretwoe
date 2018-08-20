@@ -83,6 +83,7 @@ class LeafNet(nn.Module):
         x = F.relu(F.max_pool2d(self.conv1(x), 2, stride = 2))   # 128 x 32 x 31 x31
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2, stride = 2)) # 128 x 64 x 14 x 14
         x = x.view(-1, 64*14*14)
+        #pdb.set_trace()
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
@@ -926,7 +927,7 @@ class masked_image_classifier():
             self.net = HasyNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 369
         elif task == 'leafsnap':
-            self.input_size = (128,128)
+            self.input_size = (64, 64)
             self.net = LeafNet(final_nonlin='sigmoid').to(self.device)
             self.nclasses = 185
         else:

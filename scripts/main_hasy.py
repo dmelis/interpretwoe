@@ -9,11 +9,11 @@ import matplotlib as mpl
 if mpl.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     mpl.use('Agg')
-# Needed to print latex symbols properly
+# Dataset has a lot of nonstandard latex symbols - need to manually load latex additional libraries
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath,amssymb,amsthm,'
                                         'mathrsfs,amsfonts,dsfont,wasysym,cmll,'
-                                        'stmaryrd, gensymb}'] #for \text command
+                                        'stmaryrd, gensymb}']
 
 
 import torch
@@ -26,12 +26,6 @@ from src.explainers import MCExplainer
 from src.datasets import load_hasy_data, load_full_dataset
 
 def parse_args():
-
-    #senn_parser = get_senn_parser()
-    # [args_senn, extra_args] = senn_parser.parse_known_args()
-
-    #
-    ### Local ones
     parser = argparse.ArgumentParser(add_help=False,
         description='Interpteratbility robustness evaluation on HASY dataset')
 

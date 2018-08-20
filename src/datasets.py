@@ -8,6 +8,12 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import torch.utils.data.dataloader as dataloader
 from torch.utils.data import TensorDataset
 
+try:
+    from torchtext import data as tntdata
+    import spacy
+    spacy_en = spacy.load('en')
+except:
+    pass
 
 def read_symbol_dict(fpath):
     sym2ind = {}
@@ -181,3 +187,66 @@ def load_full_dataset(loader, to_numpy = False, max_examples = None):
         X_full = X_full[idxs]
         Y_full = Y_full[idxs]
     return X_full, Y_full
+
+
+def tokenizer(text): # create a tokenizer function
+    return [tok.text for tok in spacy_en.tokenizer(text)]
+
+def load_ets_data(data_root = None, batch_sizes = (32, 256, 256),
+    embeddings = 'glove-100', debug = False):
+
+    # Data paths etc
+    if data_root is None:
+        root = os.path.dirname(os.getcwd())
+        data_root = pathlib.Path(root + '/data/ETS')
+
+    #data_dir = os.path.join(data_root, 'data/text/')
+
+    if embeddings == 'glove-100':
+        embname = "glove.6B.100d"
+    elif embeddings == 'glove-300':
+        embname = "glove.6B.300d"
+    else:
+        raise ValueError("Unrecognized embeddings")
+
+    # Define filds for torchtext
+    TEXT = tntdata.Field(
+        sequential=True,
+        tokenize = tokenizer, #tntdata.get_tokenizer('spacy'),
+        lower=True,
+        batch_first = True,
+        include_lengths=True,
+        #fix_length = 200, # Shorter string will be padded
+        init_token='<SOS>', eos_token='<EOS>'
+    )
+
+    #LABEL = tntdata.Field(sequential=False, use_vocab=False)
+    LABEL = tntdata.LabelField()
+
+    # Get data
+    train_ext = 'dev.tsv' if debug else 'train.tsv'
+    train, val, test = tntdata.TabularDataset.splits(
+        data_root,
+        train = train_ext, validation = 'dev.tsv', test = 'test.tsv',
+        format='tsv', skip_header = True,
+        fields=[(None, None), ('text', TEXT),
+                ('label', LABEL), (None, None)])   # We ignore fist and last fields (id, score)
+
+    # Get dynamic batch loaders for each fold (these take care of padding, etc)
+    train_loader, val_loader, test_loader = tntdata.BucketIterator.splits(
+        (train, val, test), sort_key=lambda x: len(x.text),
+        batch_sizes=batch_sizes, device=-1, sort_within_batch=True, repeat = False)
+
+    # Build vocabs
+    TEXT.build_vocab(train, vectors = embname)
+    LABEL.build_vocab(train)
+    vocab = TEXT.vocab
+    langs = LABEL.vocab.itos
+
+    print('Dataset size: {}/{}/{} (Train, valid, test)'.format(
+        len(train), len(val), len(test)))
+    print('Vocabulary size: ', len(vocab))
+    print('Number of languages: {}, {}'.format(len(langs),' / '.join(langs)))
+    print('Embedding size: ', vocab.vectors.shape[1])
+
+    return train_loader, val_loader, test_loader, train, val, test, vocab, langs

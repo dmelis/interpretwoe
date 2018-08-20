@@ -1,6 +1,7 @@
 
 # Data
 /data/
+.vector_cache/
 
 # Models
 /models/

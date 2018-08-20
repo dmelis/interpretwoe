@@ -1,5 +1,5 @@
 
-.PHONY: clean clean_hasy clean_leafsnap hasy leafsnap
+.PHONY: clean clean_hasy clean_leafsnap hasy leafsnap ets
 
 
 HASY_URL = "https://zenodo.org/record/259444/files/HASYv2.tar.bz2"
@@ -36,6 +36,11 @@ $(leafsnap):
 	wget --continue --tries 0 $(LEAF_URL) -P data/raw/leafsnap
 	tar -xvf data/raw/leafsnap/leafsnap-dataset.tar --directory data/raw/leafsnap/
 	scripts/process_leafsnap.sh
+
+ets:
+	pip install spacy
+	python -m spacy download en
+
 
 hasy: $(hasy)
 leafsnap: $(leafsnap)

@@ -12,3 +12,4 @@ watermark
 # Optional NLP tools (needed for NLP task)
 nltk
 torchtext
+spacy
