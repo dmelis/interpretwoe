@@ -224,7 +224,7 @@ def main():
     x  = batch_x[idx:idx+1]
     fx = clf(x, x_len)
     p, pred = fx.max(1)
-    p = F.softmax(fx).max().item()
+    p = torch.softmax(fx).max().item()
     #print(classes[batch_y[idx].item()])
     e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
 
