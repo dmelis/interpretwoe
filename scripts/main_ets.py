@@ -90,7 +90,7 @@ def parse_args():
                         help='where to dump training logs  epoch stats (and config??)')
 
     # data loading
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=8,
                         help='num workers for data loader')
 
 
@@ -224,7 +224,7 @@ def main():
     x  = batch_x[idx:idx+1]
     fx = clf(x, x_len)
     p, pred = fx.max(1)
-    p = torch.softmax(fx).max().item()
+    p = torch.nn.functional.softmax(fx).max().item()
     #print(classes[batch_y[idx].item()])
     e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
 
