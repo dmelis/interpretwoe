@@ -528,7 +528,7 @@ class MCExplainer(object):
         return max_S, max_C, hist_V
 
     @staticmethod
-    def optimize_over_ngram_attributes(model, criterion, masker, x, V = None, tgt_classes = [1,2],
+    def optimize_over_ngram_attributes(model, criterion, masker, x, y, V = None, tgt_classes = [1,2],
                                  sort_hist = False, show_plot = False, plot_type = 'treemap', class_names = None,
                                  loss = 'euclidean', force_include_class = None, verbose = False):
         """
@@ -557,7 +557,8 @@ class MCExplainer(object):
             output = model(X_s)
             hist = output.detach().numpy().squeeze()
             hist_V = hist[V]
-            obj, C_rel = criterion(hist_V, V=V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
+            obj, C_rel = criterion(hist_V, pred = y, V = V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
+            #obj, C_rel = criterion(hist_V, V=V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
             # Convert from relative indices to true classes
              #TODO: Maybe move this to criterion?
             C = V[C_rel]
