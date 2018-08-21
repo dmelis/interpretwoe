@@ -137,6 +137,7 @@ def get_relabeled_loader(model, dataset, classes, batch_size=128, device=-1):
 def main():
     args = parse_args()
     model_path, log_path, results_path = generate_dir_names('ets', args)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load Data
     print('Loading data...', end='')
@@ -199,10 +200,12 @@ def main():
     else:
         print('Loading pre-trained meta masking model')
         mask_model = masked_text_classifier.load(metam_path)
+        mask_model.net = mask_model.net.to(device)
         pdb.set_trace()
         #mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ### EXPLAIN SOME INSTANCES
+
     Explainer = MCExplainer(clf, mask_model, classes = class_names,
                       reg_type = args.mce_reg_type,
                       crit_alpha = args.mce_alpha,
@@ -213,6 +216,9 @@ def main():
     batch = next(iter(test_loader))
     batch_x, batch_x_lens = batch.text
     batch_y = batch.label
+    batch_x, batch_x_lens= batch_x.to(device), batch_x_lens.to(device)
+    batch_y = batch_y.to(device)
+
     idx = 15
     x_len = batch_x_lens[idx:idx+1]
     x  = batch_x[idx:idx+1]
