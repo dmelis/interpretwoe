@@ -8,14 +8,19 @@ import matplotlib
 if matplotlib.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     matplotlib.use('Agg')
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 import torch
+import numpy as np
 
 # Local Imports
 from src.models import image_classifier
 from src.models import masked_image_classifier
 from src.utils import generate_dir_names
 from src.explainers import MCExplainer
-from src.datasets import load_mnist_data
+from src.datasets import load_mnist_data, load_full_dataset
+from src.models import mnist_unnormalize
 
 
 def parse_args():
@@ -39,6 +44,8 @@ def parse_args():
                         help='Padding around input image to define attributes')
 
     # Explainer
+    parser.add_argument('--paradigm', type=str, choices = ['likelihood', 'hybrid', 'classification'],
+                            default='likelihood', help='Probabilistic explanation paradigm')
     parser.add_argument('--mce_reg_type', type=str, choices = ['exp', 'quadratic'],
                             default='exp', help='Type of regularization for explainer scoring function objective')
     parser.add_argument('--mce_alpha', type=float,
@@ -49,6 +56,7 @@ def parse_args():
     # device
     parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu' )
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode' )
+    parser.add_argument('--seed', type = int, default=2018, help='set seed. Choose -1 for no seed.' )
 
     # learning
     parser.add_argument('--optim', type=str, default='adam', help='optim method [default: adam]')
@@ -81,6 +89,10 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.seed > 0:
+        np.random.seed(args.seed)
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
     args.nclasses = 10
     classes = [str(i) for i in range(10)]
     model_path, log_path, results_path = generate_dir_names('mnist', args)
@@ -116,8 +128,11 @@ def main():
         train_pred = clf.label_datatset(train_loader_unshuffled)
         train_loader.dataset.train_labels = train_pred
 
+        X_full, Y_full = load_full_dataset(train_loader_unshuffled, to_numpy=True,
+                            max_examples =None, unnormalize = mnist_unnormalize)
         # Train meta model
-        mask_model = masked_image_classifier(task = 'mnist', optim = args.optim,
+        mask_model = masked_image_classifier(task = 'mnist', X = X_full, Y = Y_full,
+                                             optim = args.optim,
                                              mask_type = args.attrib_type,
                                              padding = args.attrib_padding,
                                              mask_size = mask_size)
@@ -137,11 +152,14 @@ def main():
 
     # Grab a batch for experiments
     batch_x, batch_y = next(iter(train_loader))
-    idx = 63
+    idx = 3
     x  = batch_x[idx:idx+1]
     print(classes[batch_y[idx].item()])
 
     e = Explainer.explain(x, verbose = 0 , show_plot = 1)
+    save_path = os.path.join(args.results_path, 'mnist/expl_id-{}_{}_{}_alpha-{}_p-{}.pdf'.format(
+                    idx, args.paradigm, args.mce_reg_type, args.mce_alpha, args.mce_p))
+    e.plot(save_path = save_path)
 
 
 if __name__ == '__main__':

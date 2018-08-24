@@ -3,6 +3,7 @@ import sys
 import pdb
 from tqdm import tqdm
 import numpy as np
+import scipy as sp
 import torch
 
 import matplotlib.pyplot as plt
@@ -911,7 +912,7 @@ class class_contractive_ae():
         print('\nTest set: Average loss: {:.8f}\n'.format(test_loss))
 
 class masked_image_classifier():
-    def __init__(self, task = 'mnist', optim = 'adam', mask_type = 'disjoint',
+    def __init__(self, task = 'mnist', paradigm = 'likelihood', optim = 'adam', mask_type = 'disjoint',
                 missing_method = 'zero', padding = 0, knn = 20, image_size = (28,28),
                 mask_size = (14,14), log_interval = 10, X = None, Y = None, **kwarg):
         super(masked_image_classifier, self).__init__()
@@ -924,6 +925,19 @@ class masked_image_classifier():
         self.mask_size = mask_size
         self.task = task
         self.X, self.Y = X, Y
+        self.paradigm = paradigm
+        if self.paradigm == 'likelihood':
+            self.meta_method = 'distance' # (or knn)
+            self.criterion   = F.binary_cross_entropy
+        elif self.paradigm == 'classification':
+            self.meta_method = 'knn' # (or knn)
+            self.criterion   = F.cross_entropy # had
+        elif self.paradigm == 'hybrid':
+            self.meta_method = 'knn' # (or knn)
+            self.criterion   = F.binary_cross_entropy # had
+        else:
+            raise ValueError('Unrecognized paradigm')
+
         if task == 'mnist':
             self.input_size = (28,28)
             self.net = MnistNet(final_nonlin='sigmoid').to(self.device)
@@ -1012,6 +1026,7 @@ class masked_image_classifier():
             res = faiss.StandardGpuResources()
             index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add((X.squeeze() * np.tile(mask,(X.shape[0],1,1))).reshape(-1,W*H))                  # add vectors to the index
+        #pdb.set_trace()
         D, Idxs = index.search(x.view(-1,W*H).cpu().numpy(), self.knn)     # actual search
         ## FIXME: this looks like a bug from numpy
         if Idxs.shape[0] < Idxs.shape[1]:
@@ -1028,16 +1043,89 @@ class masked_image_classifier():
         else:
             return Freqs
 
+    def _get_likelihood_targets(self, x_S, mask, X, Y):
+        """
+            The new approach. X is sample
+
+            - x_S: query, masked and unnormalized
+            - X should be unnormalized, mask will be applied directly
+            TODO: mnist unnormalized
+        """
+        W, H = self.input_size
+
+        # I verified that the two approaches are equivalent
+        #TODO: More efficient way that copying to cpu suggested here: https://github.com/facebookresearch/faiss/issues/561
+        # The slow way:
+        if self.device.type == 'cuda':
+            # range_search is not implemented in GPU indexes in FAISS yet.
+            targs = np.zeros((x_S.shape[0], self.nclasses))
+            for k in range(self.nclasses):
+                X_k = X[Y==k]
+                X_k_S = (X_k.squeeze() * np.tile(mask,(X_k.shape[0],1,1))).reshape(-1,W*H)
+                D = sp.spatial.distance.cdist(x_S.view(-1, 28*28).numpy(), X_k_S)
+                tau = np.percentile(D, 20)
+                targ_k = (D < tau).mean(1)
+                targs[:,k] = targ_k
+        else:
+            # The fast way (only CPU)
+            targs = np.zeros((x_S.shape[0], self.nclasses))
+            for k in range(self.nclasses):
+                X_k = X[Y==k]
+                #X_k_S = (X_k.squeeze() * np.tile(mask,(X_k.shape[0],1,1))).reshape(-1,W*H)
+                index = faiss.IndexFlatL2(W*H)   # build the index
+                #pdb.set_trace()
+                index.add((X_k.squeeze() * np.tile(mask,(X_k.shape[0],1,1))).reshape(-1,W*H))                  # add vectors to the index
+
+                # Hack to get a reasonable tau. Consider doing somehting better
+                # couldn't find any way to retrieve mean or max dist from index
+                percentile = .20
+                D, Idxs = index.search(x_S.view(-1,W*H).cpu().numpy(), int(X_k.shape[0]*percentile))
+                tau = D[:,-1].mean().item() # Mean distance ok quantile-th closest neighbor
+
+                # Actual Search
+                lims, D, I = index.range_search(x_S.view(-1,W*H).cpu().numpy(), tau)
+                nretrieved = np.array([lims[i+1] - lims[i] for i in range(x_S.shape[0])])
+                targs[:,k] = nretrieved/X_k.shape[0]
+
+                #pdb.set_trace()
+            # fig, ax = plt.subplots(1,2)
+            # ax[0].imshow(x_S[0].squeeze())
+            # ax[1].imshow(X_k_S[0].reshape(28,28))
+            # plt.show(block=True)
+            #print(targs[0])
+            #sleep()
+        #pdb.set_trace()
+
+        return targs
+
+
 
     def _get_reference_data(self,loader):
-        if self.task == 'mnist':
-            #pdb.set_trace()
+        if self.task == 'mnist' and (self.X is None or self.Y is None):
+            print("Should not be here. This is deprecated")
+            pdb.set_trace()
             if loader.dataset.train:
                 X_full = (loader.dataset.train_data/255).numpy().astype('float32')
                 Y_full = loader.dataset.train_labels.numpy()
             else:
                 X_full = (loader.dataset.test_data/255).numpy().astype('float32')
                 Y_full = loader.dataset.test_labels.numpy()
+            # pdb.set_trace()
+            # sequential_loader =
+            #
+            # orig_sampler = loader.sampler
+            # orig_batch_sampler = loader.batch_sampler
+            #
+            # sampler = torch.utils.data.sampler.SequentialSampler(loader.dataset)
+            # batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, loader.batch_size, False)
+            # loader.sampler = sampler
+            # loader.batch_sampler = batch_sampler
+            #
+            # X_full = torch.Tensor().new_empty(loader.dataset.train_data.shape)
+            # Y_full = torch.Tensor().new_empty(loader.dataset.train_labels.shape)
+            # for inputs, labels in loader:
+            #     pdb.set_trace()
+            #     #X_full[:inputs.shape[0]]
         elif self.X is not None and self.Y is not None:
             # Reference data has been precomputed outside this function
             X_full, Y_full = self.X, self.Y
@@ -1045,15 +1133,13 @@ class masked_image_classifier():
 
     def train_epoch(self, train_loader, epoch):
         self.net.train()
-
         X_full, Y_full = self._get_reference_data(train_loader)
         W, H   = self.input_size
         w, h   = self.mask_size
-
         ntrain = len(train_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
 
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, _ = data.to(self.device), target.to(self.device)
+        for batch_idx, (data, labels) in enumerate(train_loader):
+            data, labels = data.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
 
             mask, S = self._sample_mask()
@@ -1065,8 +1151,13 @@ class masked_image_classifier():
                 X_s = data*mask.view(1,1,W,H).repeat(data.shape[0], 1, 1, 1)
 
             # Compute Nearest neighbors with this mask
-            freqs = self._get_knn_label_freqs(X_s, mask = mask, X=X_full,Y=Y_full)
-            target = (torch.FloatTensor(freqs)/self.knn).to(self.device)
+            #self.meta_method = 'knn'
+            if self.meta_method == 'knn':
+                freqs = self._get_knn_label_freqs(X_s, mask = mask, X=X_full,Y=Y_full)
+                target = (torch.FloatTensor(freqs)/self.knn).to(self.device)
+            elif self.meta_method == 'distance':
+                freqs = self._get_likelihood_targets(X_s, mask, X_full, Y_full)
+                target = torch.FloatTensor(freqs).to(self.device)
 
             #pdb.set_trace()
             if self.task == 'mnist':
@@ -1074,7 +1165,19 @@ class masked_image_classifier():
             elif self.task in ['hasy','leafsnap']:
                 output = self.net(X_s)
 
-            loss = F.binary_cross_entropy(output, target)
+            loss = self.criterion(output, target)
+            torch.set_printoptions(precision=2)
+            if self.paradigm == 'classification':
+                pred = output.detach().max(1, keepdim=True)[1]
+                corr = pred.eq(target.detach().view_as(pred)).sum().item()
+            else:
+                pred = output.detach().round()
+                #corr = pred.eq(target.detach().view_as(pred).round()).float().mean(0)
+                #pdb.set_trace()
+                corr = agnostic_multilabel_metric(pred,labels, size_average = True).item()
+                #print(corr)
+
+
 
             loss.backward()
             self.optimizer.step()
@@ -1083,7 +1186,6 @@ class masked_image_classifier():
                     epoch, batch_idx * len(data),ntrain,
                     100. * batch_idx / len(train_loader), loss.item()))
             #break
-
     def test(self, test_loader, epoch):
         self.net.eval()
         test_loss = 0
@@ -1104,9 +1206,8 @@ class masked_image_classifier():
         #ntest = len(test_loader.sampler.indices) # len(test_loader.dataset is wrong if using subsetsampler!)
 
         with torch.no_grad():
-            for (data, target) in tqdm(test_loader):
-                #print(idx)
-                data, target = data.to(self.device), target.to(self.device)
+            for (data, labels) in tqdm(test_loader):
+                data, labels = data.to(self.device), labels.to(self.device)
                 mask, S = self._sample_mask()
 
                 # Mask Inputs
@@ -1117,8 +1218,12 @@ class masked_image_classifier():
 
                 #pdb.set_trace()
                 # Compute Nearest neighbors with this mask
-                freqs = self._get_knn_label_freqs(X_s, mask = mask, X=X_full,Y=Y_full)
-                target = (torch.FloatTensor(freqs)/self.knn).to(self.device)
+                if self.meta_method == 'knn':
+                    freqs = self._get_knn_label_freqs(X_s, mask = mask, X=X_full,Y=Y_full)
+                    target = (torch.FloatTensor(freqs)/self.knn).to(self.device)
+                elif self.meta_method == 'distance':
+                    freqs = self._get_likelihood_targets(X_s, mask, X_full, Y_full)
+                    target = torch.FloatTensor(freqs).to(self.device)
 
                 #pdb.set_trace()
                 if self.task == 'mnist':
@@ -1127,12 +1232,29 @@ class masked_image_classifier():
                     output = self.net(X_s)
                 #loss = F.binary_cross_entropy(output, target)
 
-                test_loss += F.binary_cross_entropy(output, target, size_average = False).item()
+                test_loss += self.criterion(output, target, size_average = False).item()
+                if self.paradigm == 'classification':
+                    pred = output.detach().max(1, keepdim=True)[1]
+                    corr = pred.eq(target.detach().view_as(pred)).sum().item()
+                else:
+                    pred = output.detach().round()
+                    #corr = pred.eq(target.detach().view_as(pred).round()).float().mean(0)
+                    #pdb.set_trace()
+                    corr = agnostic_multilabel_metric(pred,labels, size_average = False).item()
+                    #print(corr)
+
+
+                # if self.paradigm == 'classification':
+                #     pred = output.max(1, keepdim=True)[1]
+                # else:
+                #     pdb.set_trace()
+                #     pred = output.round()
+                correct += corr
+
                 #test_loss += F.nll_loss(output, target, size_average=False).item() # sum up batch loss
                 #pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
                 #correct = 0
                 # Retrieve correct from options
-                #correct += pred.eq(target.view_as(pred)).sum().item()
         test_loss /= ntest
         print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct,ntest, 100. * correct / ntest))
@@ -1206,10 +1328,29 @@ class masked_image_classifier():
                 axb1.set_title('True Class Freq')
                 axb2.set_title('Pred Class Freq')
 
-        if not os.path.exists('../out/mask_' + self.task):
-            os.makedirs('../out/mask_{}/'.format(self.task))
-        plt.savefig('../out/mask_{}/{}.png'.format(self.task, str(epoch).zfill(3)), bbox_inches='tight')
-        plt.show()
+        # TODO: Fix these paths
+        if not os.path.exists('src/out/mask_' + self.task):
+            os.makedirs('src/out/mask_{}/'.format(self.task))
+        plt.savefig('src/out/mask_{}/{}.png'.format(self.task, str(epoch).zfill(3)), bbox_inches='tight')
+        #plt.show()
+        #plt.close('all')
+
+def agnostic_multilabel_metric(X, Y, size_average = False):
+    """
+        Computes accuracy with respect to true class, i.e., for each example:
+        acc is 1 if true class was retrieved, zero otherwise. Ignores all other
+        classes
+
+        - Y: true class (int) (n,)
+        - X: (n,k) - predicted retrieval: multi-hot per row (binary)
+
+    """
+    correct = torch.gather(X,1,Y.view(-1,1)).sum().int()
+    if size_average:
+        correct = correct.div(Y.shape[0])
+    else:
+        correct
+    return correct
 
 
 class masked_text_classifier():

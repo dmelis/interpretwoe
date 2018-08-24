@@ -164,7 +164,10 @@ def load_leafsnap_data(data_dir, splits=(0.1,0.1), shuffle=True, random_seed=200
 
     return train_loader, valid_loader, test_loader, data#, sym2idx, idx2sym
 
-def load_full_dataset(loader, to_numpy = False, max_examples = None):
+def load_full_dataset(loader, to_numpy = False, max_examples = None, unnormalize = False):
+    """
+        - unnormalize: callable. If provided, will apply it to input data (useful for MNIST)
+    """
     print('Loading and stacking image data....')
     X_full, Y_full = [], []
     tot = 0
@@ -175,12 +178,17 @@ def load_full_dataset(loader, to_numpy = False, max_examples = None):
         tot += data.shape[0]
         # if max_examples and (tot > max_examples):
         #     break
-    if to_numpy:
-        X_full = torch.cat(X_full).numpy().astype('float32')
-        Y_full = torch.cat(Y_full).numpy()
+    if unnormalize:
+        X_full = unnormalize(torch.cat(X_full))
     else:
         X_full = torch.cat(X_full)
-        Y_full = torch.cat(Y_full)
+
+    Y_full = torch.cat(Y_full)
+
+    if to_numpy:
+        X_full = X_full.numpy().astype('float32')
+        Y_full = Y_full.numpy()
+
     if max_examples:
         idxs = torch.randperm(X_full.shape[0])[:max_examples]
         print(idxs[:10])

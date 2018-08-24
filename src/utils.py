@@ -89,7 +89,7 @@ def generate_dir_names(dataset, args, make = True):
     model_path     = os.path.join(args.model_path, dataset, suffix)
     log_path       = os.path.join(args.log_path, dataset, suffix)
     results_path   = os.path.join(args.results_path, dataset, suffix)
-
+    print(model_path, results_path)
     if make:
         for p in [model_path, log_path, results_path]:
             if not os.path.exists(p):
@@ -345,30 +345,15 @@ def plot_text_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     n  = len(S)
 
     window = 20
-    #contex_idx = range(max(0,S[0] - window), n -1 + min(N, S[1] + window))
     contex_idx = range(max(0,S[0] - window), 1+ min(N-1,S[-1]+window))
-    #print(S)
-    #print(contex_idx)
-    #print(len(contex_idx))
-    #print(N, S, S[-1], S[-1]+window, contex_idx, len(contex_idx))
     input_crop = [vocab.itos[w.item()] for w in x.squeeze()[contex_idx]]
     if S[0] > window:
         input_crop[0] = '...'
     if S[1] < N - window:
         input_crop[-1] = '...'
     ngram = [vocab.itos[w.item()] for w in xs.squeeze()]
-    #print(ngram)
     weights = torch.zeros(len(input_crop)).byte() # Batch version
-    #print(window, N - S[1])
     weights[min(window, S[0]):-min(N-1-S[-1],window)] = 100
-    #weights[-window:] = 0
-    #print(weights)
-    #pdb.set_trace()
-    #print(S, contex_idx, len(contex_idx))
-    #print(weights)
-    #print(asd.asdas)
-
-    #plot_text_explanation(ngram, 0*np.ones(5), ax = ax[0], n_cols = 5)
     plot_text_explanation(input_crop, weights, ax = ax[0], n_cols = 8)
 
     try:
@@ -401,6 +386,7 @@ def plot_text_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     #plt.tight_layout()
     if title:
         plt.suptitle(title, fontsize = 18)
+    return ax
 
 def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
               title = None, show_cropped = True,
@@ -538,9 +524,8 @@ def treemap_boundary(sizes, boundary = None, norm_x = 100, norm_y = 100, topk = 
     y = [rect['y'] for rect in rects]
     dx = [rect['dx'] for rect in rects]
     dy = [rect['dy'] for rect in rects]
-
     br = ax.bar(x, dy, width=dx, bottom=y, color=color,
-       label=label, align='edge', **kwargs)
+        label=label, align='edge', **kwargs)
 
     if boundary is not None:
         polygons = []
@@ -556,7 +541,6 @@ def treemap_boundary(sizes, boundary = None, norm_x = 100, norm_y = 100, topk = 
 
     if not value is None:
         va = 'center' if label is None else 'top'
-
         for v, r in zip(value, rects):
             x, y, dx, dy = r['x'], r['y'], r['dx'], r['dy']
             ax.text(x + dx / 2, y + dy / 2, v, va=va, ha='center')
@@ -628,7 +612,7 @@ def plot_text_explanation(words, values, n_cols = 6, ax = None, save_path = None
     ax.set_xticks([])
     plt.title('')
     ax.axis('off')
-    ax.grid('off')
+    ax.grid(False)
     if save_path:
         plt.savefig(save_path + '_expl.pdf', bbox_inches = 'tight', format='pdf', dpi=300)
     #plt.show()

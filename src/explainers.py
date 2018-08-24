@@ -6,7 +6,6 @@ import time
 import pdb
 import torch
 from tqdm import tqdm
-
 import matplotlib.pyplot as plt
 
 try:
@@ -146,12 +145,12 @@ def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='exp',
     if len(C) == 0:
         pdb.set_trace()
     #print(asd.asd)
-
+    #pdb.set_trace()
     # Map back to original indices of classes
     #C_orig = [classes[i] for i in C] if subs_k < true_k else C
     #else:
     #print('Selected classes (fake index)', C)
-
+    #pdb.set_trace()
     return m, C
 
 
@@ -274,11 +273,14 @@ class MCExplainer(object):
 
         if self.task == 'mnist':
             self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
+            self.input_type = 'image'
         elif self.task in ['hasy', 'leafsnap']:
             H, W = self.input_size
             self.masker = partial(image_masker_unnormalized, H=H, W=W)# #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)    )
+            self.input_type = 'image'
         elif self.task == 'ets':
             self.masker = ets_masker
+            self.input_type = 'text'
         else:
             raise ValueError('Unrecognized task.')
         self.criterion = self._init_criterion()
@@ -316,10 +318,6 @@ class MCExplainer(object):
 
         return crit
 
-    #def plot_explanation(self, E, save_path = None):
-
-
-
     def explain(self, x, y = None, verbose = False, show_plot = 1, save_path = None):
         # if y not provided, call classif model
         if y is None:
@@ -327,15 +325,17 @@ class MCExplainer(object):
             p, y = out.max(1)
             y = y.item()
 
-        if show_plot > 1:
+        if show_plot > 1 and self.input_type == 'image':
             plt.imshow(x.squeeze(), cmap='Greys')
             plt.title('Prediction: ' + self.classes[y] + ' (class no.{})'.format(y), fontsize = 20)
             plt.xticks([])
             plt.yticks([])
             plt.show()
+        else:
+            print(y)
+            print(self.classes)
+            print('Prediction: ' + self.classes[y] + ' (class no.{})'.format(y))
             #print('hasdasd')
-
-        #print(asd.asd)
 
         V = list(range(len(self.classes)))
         E = Explanation(x, y, self.classes, masker = self.masker, task = self.task)
@@ -377,7 +377,6 @@ class MCExplainer(object):
             if verbose > 1:
                 print('Entailed classes: ')
                 print([self.classes[c] for c in max_C])
-                #if self.task == 'ets':
 
             if len(max_C) == len(V) or len(max_C) == 0:
                 print('Here')
@@ -441,8 +440,7 @@ class MCExplainer(object):
             show_plot = min(show_plot, 1)
 
         #signal.signal(signal.SIGINT, handler)
-
-        #ij_pairs =
+        #print(KERNEL)
         pbar = tqdm(total=(W-w)*(H-h))
         for (ii,jj) in itertools.product(range(0, W-w),range(0,H-h)):
                 #print(ii,jj)
@@ -528,12 +526,14 @@ class MCExplainer(object):
         return max_S, max_C, hist_V
 
     @staticmethod
-    def optimize_over_ngram_attributes(model, criterion, masker, x, y, V = None, tgt_classes = [1,2],
-                                 sort_hist = False, show_plot = False, plot_type = 'treemap', class_names = None,
-                                 loss = 'euclidean', force_include_class = None, verbose = False):
+    def optimize_over_ngram_attributes(model, criterion, masker, x, y, V = None,
+                                 tgt_classes = [1,2], sort_hist = False,
+                                 show_plot = False, plot_type = 'treemap',
+                                 class_names = None, loss = 'euclidean',
+                                 force_include_class = None, verbose = False):
         """
-            Given masking model, input x and target histogram, finds subset of x (i.e., attribute)
-            that minimizes loss with respect to target historgram.
+            Given masking model, input x and target histogram, finds subset of x
+            (i.e., attribute) that minimizes loss with respect to target historgram.
 
              - V: ground set of possible classes
             plot: 0/1/2 (no plotting, plot only final, plot every iter)
@@ -550,6 +550,22 @@ class MCExplainer(object):
         if force_include_class:
             assert force_include_class in V, "Error: class to be force-included not in ground set"
 
+        if KERNEL == 'terminal':
+            fig, ax = plt.subplots(1, 2, figsize = (10,4),
+                                gridspec_kw = {'width_ratios':[2, 1]})
+            plt.ion()
+            plt.show()
+            ims = None
+        else:
+            fig, ax, ims = None, None, None
+
+        def handler(*args):
+            print('Ctrl-c detected: will stop iterative plotting')
+            nonlocal show_plot
+            show_plot = min(show_plot, 1)
+
+        signal.signal(signal.SIGINT, handler)
+
         for ii in range(0, N-n):
             #print(ii)
             S = np.s_[range(ii,ii+n)]
@@ -562,22 +578,34 @@ class MCExplainer(object):
             # Convert from relative indices to true classes
              #TODO: Maybe move this to criterion?
             C = V[C_rel]
+            labstr = 'Ngram: [{}:{}], Objective: {:8.4e}'.format(ii, ii+n,obj.item())
+            ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
             if show_plot > 1:
-                clear_output(wait=True)
-                labstr = 'Ngram: [{}:{}], Objective: {:8.4e}'.format(ii, ii+n,obj.item())
-                plot_text_attrib_entailment(x, X_s, S, C, V, hist_V,
+                if KERNEL == 'ipython':
+                    clear_output(wait=True)
+                    ax = None
+
+                ax = plot_text_attrib_entailment(x, X_s, S, C, V, hist_V,
                                     plot_type = plot_type,
                                     class_names = class_names,
-                                    vocab = model.vocab,
+                                    vocab = model.vocab, ax = ax,
                                     title = labstr, sort_bars = False)
-                plt.show()
+                if KERNEL == 'terminal':
+                    plt.draw()
+                    plt.pause(.005)
+                    ax[0].clear()
+                    ax[1].clear()
+                else:
+                    plt.show()
             elif verbose:
-                ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
-                labstr = 'Ngram: {} ([{}:{}]), Objective: {:8.4e}'.format(ngram_str, ii, ii+n,obj.item())
+                #ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
+                #labstr = 'Ngram: {} ([{}:{}]), Objective: {:8.4e}'.format(ngram_str, ii, ii+n,obj.item())
                 print(labstr)
+
             if force_include_class is not None and (not force_include_class in C):
                 # Target class not in entailed set
                 #print(force_include_class, C)
+                obj = float("-inf")
                 continue
             if obj < max_obj:
                 max_obj = obj
@@ -586,15 +614,18 @@ class MCExplainer(object):
 
         if max_S is None:
             print('Warning: could not find any attribute that causes to predicted class be entailed')
-            return None, None
+            return None, None, None
 
+        if KERNEL == 'terminal':
+            plt.ioff()
+            plt.close('all')
 
         # Reconstruct vars for optimal
         X_s = masker(x, max_S)
         output = model(X_s)
         hist = output.detach().numpy().squeeze()
         hist_V = hist[V]
-        obj, C_rel = criterion(hist_V, V=V)#, sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
+        obj, C_rel = criterion(hist_V, pred = y, V = V)#, sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
         max_C = V[C_rel]
         #print(asd.asd)
         ii = max_S[0]
@@ -613,7 +644,6 @@ class MCExplainer(object):
                 plt.show()
         else:
             print(labstr)
-
         return max_S, max_C, hist_V
 
     # def criterion(self, pred, V, tgt_classes = [7,9], sort_hist = False, p = 1, loss = 'delta', verbose = False):

@@ -9,7 +9,10 @@ if matplotlib.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     matplotlib.use('Agg')
 import torch
-
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 # Local Imports
 import src
 from src.models import image_classifier,  masked_image_classifier

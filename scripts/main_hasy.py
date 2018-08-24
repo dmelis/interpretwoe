@@ -9,6 +9,9 @@ import matplotlib as mpl
 if mpl.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     mpl.use('Agg')
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 # Dataset has a lot of nonstandard latex symbols - need to manually load latex additional libraries
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath,amssymb,amsthm,'
@@ -17,6 +20,7 @@ mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath,amssymb,amsthm,'
 
 
 import torch
+import numpy as np
 
 ### Local Imports
 from src.models import image_classifier, masked_image_classifier
@@ -79,6 +83,8 @@ def parse_args():
 
 
 def main():
+    if args.seed > 0:
+        np.random.seed(args.seed)
     args = parse_args()
     model_path, log_path, results_path = generate_dir_names('hasy', args)
 

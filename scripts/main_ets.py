@@ -9,9 +9,12 @@ import matplotlib as mpl
 if mpl.get_backend() == 'Qt5Agg':
     # Means this is being run in server, need to modify backend
     mpl.use('Agg')
+import warnings
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import torch
-
+import numpy as np
 
 from src.utils import generate_dir_names
 from src.datasets import load_ets_data
@@ -66,6 +69,8 @@ def parse_args():
                         default=False, help='enable the gpu')
     parser.add_argument('--debug', action='store_true',
                         default=False, help='debug mode')
+    parser.add_argument('--seed', type=int, default=-1,
+                        help='Set seed for reproducibility')
 
     # learning
     parser.add_argument('--optim', type=str, default='adam',
@@ -92,7 +97,6 @@ def parse_args():
     # data loading
     parser.add_argument('--num_workers', type=int, default=8,
                         help='num workers for data loader')
-
 
     #####
 
@@ -138,6 +142,8 @@ def main():
     args = parse_args()
     model_path, log_path, results_path = generate_dir_names('ets', args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.seed is not -1:
+        np.random.seed(2018)
 
     # Load Data
     print('Loading data...', end='')
@@ -150,32 +156,33 @@ def main():
     print('done!')
     class_names = langs
 
-    ### TRAIN OR LOAD CLASSIFICATION MODEL TO BE EXPLAINED
+    # TRAIN OR LOAD CLASSIFICATION MODEL TO BE EXPLAINED
     classif_path = os.path.join(model_path, "classif.pth")
     print(classif_path)
     if args.train_classif or (not os.path.isfile(classif_path)):
         print('Training classifier from scratch')
         clf = text_classifier(vocab, langs,
-                               weight_decay=args.weight_decay_clf,
-                               hidden_dim=args.hidden_dim,
-                               num_layers=args.num_layers_clf,
-                               dropout=args.dropout_clf,
-                               lr=args.lr,
-                               use_cuda=args.cuda)
+                              weight_decay=args.weight_decay_clf,
+                              hidden_dim=args.hidden_dim,
+                              num_layers=args.num_layers_clf,
+                              dropout=args.dropout_clf,
+                              lr=args.lr,
+                              use_cuda=args.cuda)
         clf.train(train_loader, val_loader, epochs=args.epochs_classif)
         clf.save(os.path.join(model_path, "classif.pth"))
     else:
         print('Loading pre-trained classifier')
-        #clf = #torch.load(os.path.join(model_path, "classif.pth"))
+        # clf = #torch.load(os.path.join(model_path, "classif.pth"))
         clf = text_classifier.load(classif_path)
         #clf.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        #pdb.set_trace()
+        # pdb.set_trace()
     # NOTE: test data doesn't have labels! It's useless
     # TODO: Split train into actual val and train
-    clf.test(test_loader)
+    # clf.test(test_loader)
 
-    ### TRAIN OR LOAD META-MODEL OF MASKED INPUTS
-    metam_path = os.path.join(model_path, "mask_model_{}.pth".format(args.ngram))
+    # TRAIN OR LOAD META-MODEL OF MASKED INPUTS
+    metam_path = os.path.join(
+        model_path, "mask_model_{}.pth".format(args.ngram))
     if args.train_meta or (not os.path.isfile(metam_path)):
         print('Training meta masking model from scratch')
         # Label training examples with ets_classifier
@@ -201,32 +208,31 @@ def main():
         print('Loading pre-trained meta masking model')
         mask_model = masked_text_classifier.load(metam_path)
         mask_model.net = mask_model.net.to(device)
-        pdb.set_trace()
+        # pdb.set_trace()
         #mask_model.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    ### EXPLAIN SOME INSTANCES
+    # EXPLAIN SOME INSTANCES
 
-    Explainer = MCExplainer(clf, mask_model, classes = class_names,
-                      reg_type = args.mce_reg_type,
-                      crit_alpha = args.mce_alpha,
-                      crit_p = args.mce_p,
-                      plot_type = args.mce_plottype)
+    Explainer = MCExplainer(clf, mask_model, classes=class_names,
+                            reg_type=args.mce_reg_type,
+                            crit_alpha=args.mce_alpha,
+                            crit_p=args.mce_p,
+                            plot_type=args.mce_plottype)
 
     # Grab a batch for experiments
-    batch = next(iter(test_loader))
+    batch = next(iter(val_loader))
     batch_x, batch_x_lens = batch.text
     batch_y = batch.label
-    batch_x, batch_x_lens= batch_x.to(device), batch_x_lens.to(device)
+    batch_x, batch_x_lens = batch_x.to(device), batch_x_lens.to(device)
     batch_y = batch_y.to(device)
 
     idx = 15
-    x_len = batch_x_lens[idx:idx+1]
-    x  = batch_x[idx:idx+1]
+    x_len = batch_x_lens[idx:idx + 1]
+    x = batch_x[idx:idx + 1]
     fx = clf(x, x_len)
     p, pred = fx.max(1)
     p = torch.nn.functional.softmax(fx).max().item()
-    #print(classes[batch_y[idx].item()])
-    e = Explainer.explain(x, pred.item(), verbose = 0 , show_plot = 1)
+    e = Explainer.explain(x, pred.item(), verbose=0, show_plot=1)
 
 
 if __name__ == '__main__':

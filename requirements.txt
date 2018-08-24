@@ -13,3 +13,4 @@ watermark
 nltk
 torchtext
 spacy
+seaborn
