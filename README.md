@@ -42,14 +42,16 @@ pip3 install -e ./
 
 ## Data preparation:
 
-Invoke the makefile with the desired dataset as argument (options currently supported: [`mnist`, `hasy`,`leafsnap`]), e.g.:
+Invoke the makefile with the desired dataset as argument (options currently supported: [`ets`, `hasy`,`leafsnap`]), e.g.:
 
 ```
 make hasy
 
 ```
 
-Or generate all of them with `make all`
+Or generate all of them with `make all`.
+
+NOTE: Since the ETS data is from LDC (and thus not public), I hid it under a password in my website. Ask me and I'll provide it directly. After executing `make ets` you'll be prompted for this password.
 
 <!-- ```
   python setup.py install
@@ -69,6 +71,22 @@ To use pretrained models:
 ```
 python scripts/main_mnist.py
 ```
+
+The first time main_mnist.py is run, it will download MNIST (takes a few minutes).
+
+
+The first time main_ets.py is run, it will download golve embeddings (takes a few minutes).
+
+
+## Overall Code Structure
+
+
+* explainers.py - defines the Explanation, Explainer Classes, contains all "explanation scoring functions"
+* models.py - collection of pytorch nn Modules defining classifier and masked classifier architectures
+* datasets.py - utils for loading datasets
+* methods.py -
+
+
 <!-- Otherwise, download Pretrained Models:
 
 ```
