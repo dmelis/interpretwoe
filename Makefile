@@ -46,8 +46,8 @@ $(ets):
 	#mkdir -p data/processed/ets
 	#pip install spacy
 	#python -m spacy download en
-	wget --user davidam --ask-password $(ETS_URL) -P data/raw/ets
-	tar -xvf data/raw/ets/ETS.tgz --directory data/raw/ETS/
+	wget --user MSR --ask-password $(ETS_URL) -P data/raw/ets
+	tar -xvf data/raw/ets/ETS.tgz --directory data/raw/ets/
 	mv data/raw/ets/ETS_*/* data/raw/ets/
 	rm -r data/raw/ets/ETS_*/
 	scripts/process_ets.sh

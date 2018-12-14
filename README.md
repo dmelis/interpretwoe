@@ -26,7 +26,10 @@ It's highly recommended that the following steps be done **inside a virtual envi
 Installing Pytorch. Find approriate version download link [here](https://pytorch.org/) e.g.:
 
 ```
-pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x86_64.whl
+pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x86_64.whl  # For CPU
+# pip3 install https://download.pytorch.org/whl/cu90/torch-0.4.1-cp36-cp36m-linux_x86_64.whl # For GPU - CUDA 9.0 in python 3.6
+# pip3 install https://download.pytorch.org/whl/cu91/torch-0.4.1-cp36-cp36m-linux_x86_64.whl # For GPU - CUDA 9.1 in python 3.6
+# etc.....
 pip3 install torchvision
 ```
 Then install remaining dependencies
@@ -61,7 +64,7 @@ NOTE: Since the ETS data is from LDC (and thus not public), I hid it under a pas
 
 To train models from scratch:
 ```
-python scripts.main_mnist.py --train-classif --train-meta
+python scripts.main_mnist.py --train_classif --train_meta
 ```
 <!-- ```
 python -m scripts.main_mnist --train-classif --train-meta
