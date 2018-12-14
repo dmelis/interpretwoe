@@ -19,9 +19,14 @@ import torch.nn as nn
 # Torchnet (tnt) utils
 from torchnet.meter.confusionmeter import ConfusionMeter
 
+if os.environ['USER'] == 'davidam':
+    HOMEDIR = '/home/davidam/'
+else:
+    HOMEDIR = os.getenv("HOME")
 
 try:
-    sys.path.append('/home/t-daalv/pkg/faiss/python')
+    #sys.path.append('/home/t-daalv/pkg/faiss/python')
+    sys.path.append(HOMEDIR, 'pkg/faiss/python')
     import faiss # Only needed by mask mnist for fast knn search
 except:
     print("FAISS library not found - will note be able to retrain masking models")

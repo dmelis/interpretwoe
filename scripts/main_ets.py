@@ -56,8 +56,8 @@ def parse_args():
                         help='Padding around input image to define attributes')
 
     # Explainer
-    parser.add_argument('--mce_reg_type', type=str, choices=['exp', 'quadratic'],
-                        default='exp', help='Type of regularization for explainer scoring function objective')
+    parser.add_argument('--mce_reg_type', type=str, choices=['decay','poly-centered'],
+                        default='decay', help='Type of regularization for explainer scoring function objective')
     parser.add_argument('--mce_alpha', type=float,
                         default=1.0, help='Alpha parameter for explainer scoring function')
     parser.add_argument('--mce_p', type=int, default=2,
@@ -151,6 +151,7 @@ def main():
         = load_ets_data(
             data_root=os.path.realpath('data/processed/ets'),
             embeddings='glove-{}'.format(str(args.embdim)),
+            emb_root=os.path.realpath('data/raw/embeddings'),
             batch_sizes=(args.batch_size, 256, 256),
             debug=args.debug)
     print('done!')

@@ -46,8 +46,8 @@ def parse_args():
     # Explainer
     parser.add_argument('--paradigm', type=str, choices = ['likelihood', 'hybrid', 'classification'],
                             default='likelihood', help='Probabilistic explanation paradigm')
-    parser.add_argument('--mce_reg_type', type=str, choices = ['exp', 'quadratic'],
-                            default='exp', help='Type of regularization for explainer scoring function objective')
+    parser.add_argument('--mce_reg_type', type=str, choices=['decay','poly-centered'],
+                        default='decay', help='Type of regularization for explainer scoring function objective')
     parser.add_argument('--mce_alpha', type=float,
                             default=1.0, help='Alpha parameter for explainer scoring function')
     parser.add_argument('--mce_p', type=int, default=2, help='P power for explainer scoring function')

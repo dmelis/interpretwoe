@@ -201,7 +201,7 @@ def tokenizer(text): # create a tokenizer function
     return [tok.text for tok in spacy_en.tokenizer(text)]
 
 def load_ets_data(data_root = None, batch_sizes = (32, 256, 256),
-    embeddings = 'glove-100', debug = False):
+    embeddings = 'glove-100', emb_root = None, debug = False):
 
     # Data paths etc
     if data_root is None:
@@ -246,7 +246,7 @@ def load_ets_data(data_root = None, batch_sizes = (32, 256, 256),
         batch_sizes=batch_sizes, device=-1, sort_within_batch=True, repeat = False)
 
     # Build vocabs
-    TEXT.build_vocab(train, vectors = embname)
+    TEXT.build_vocab(train, vectors = embname, vectors_cache=emb_root)
     LABEL.build_vocab(train)
     vocab = TEXT.vocab
     langs = LABEL.vocab.itos

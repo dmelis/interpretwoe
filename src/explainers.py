@@ -107,12 +107,13 @@ def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='exp',
 
     deltas  = vals[:-1] - vals[1:]
     Cards = np.arange(1,k) # numpy and torch range have different behavior for top end of intervaal!
-    if reg_type == 'exp':
+    if reg_type == 'decay':
         reg = 1/np.power(Cards,p)
-    elif reg_type == 'quadratic':
+    elif reg_type == 'poly-centered':
         argmin = (k+1)/2 if argmin_reg is None else argmin_reg
         #print(argmin)
-        reg = ((Cards - argmin)**p)/np.abs(argmin -1)  # Denom normalizes so that f = 1 = |c| =1
+        maxp   = max(np.abs((1 - argmin))**p, np.abs((len(Cards) - argmin))**p)
+        reg = (np.abs(Cards - argmin)**p)/maxp  # Denom normalizes so that maxreg = 1
     else:
         raise ValueError('Unrecognized mode in normalized deltas')
         #reg = torch.pow(torch.abs(Cards - k/2)*(2/k), 3)
@@ -151,6 +152,7 @@ def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='exp',
     #else:
     #print('Selected classes (fake index)', C)
     #pdb.set_trace()
+    #print(k, scores)
     return m, C
 
 
@@ -166,8 +168,6 @@ def ets_masker(x, S, max_len = None):
     #X_masked = torch.masked_select(x, mask).view(x.shape[0], -1) # Batch very
     X_masked = torch.masked_select(x,mask).view(x.shape[0], -1)
     return X_masked
-
-
 
 def mnist_masker(x, S, H = 28, W = 28):
     ii = list(range(H)[S[0]])[0]
@@ -255,6 +255,9 @@ class Explanation(object):
 
 
 class MCExplainer(object):
+    """
+        Multi-step Contrastive Explainer.
+    """
     def __init__(self, classifier, mask_model, classes, loss_type = 'norm_delta',
                 reg_type = 'exp', crit_alpha=1, crit_p=1, plot_type = 'bar'):
         self.classifier = classifier
@@ -269,7 +272,6 @@ class MCExplainer(object):
         self.input_size = mask_model.input_size
         #self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
         #self.pykernel   = detect_kernel()
-
 
         if self.task == 'mnist':
             self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
