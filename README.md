@@ -28,7 +28,7 @@ Installing Pytorch. Find approriate version download link [here](https://pytorch
 ```
 pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp36-cp36m-linux_x86_64.whl  # For CPU
 # pip3 install https://download.pytorch.org/whl/cu90/torch-0.4.1-cp36-cp36m-linux_x86_64.whl # For GPU - CUDA 9.0 in python 3.6
-# pip3 install https://download.pytorch.org/whl/cu91/torch-0.4.1-cp36-cp36m-linux_x86_64.whl # For GPU - CUDA 9.1 in python 3.6
+# pip3 install https://download.pytorch.org/whl/cu91/torch-0.4.0-cp36-cp36m-linux_x86_64.whl # For GPU - CUDA 9.1 in python 3.6
 # etc.....
 pip3 install torchvision
 ```

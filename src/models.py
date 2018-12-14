@@ -26,7 +26,7 @@ else:
 
 try:
     #sys.path.append('/home/t-daalv/pkg/faiss/python')
-    sys.path.append(HOMEDIR, 'pkg/faiss/python')
+    sys.path.append(os.path.join(HOMEDIR, 'pkg/faiss/python'))
     import faiss # Only needed by mask mnist for fast knn search
 except:
     print("FAISS library not found - will note be able to retrain masking models")
@@ -1067,7 +1067,7 @@ class masked_image_classifier():
             for k in range(self.nclasses):
                 X_k = X[Y==k]
                 X_k_S = (X_k.squeeze() * np.tile(mask,(X_k.shape[0],1,1))).reshape(-1,W*H)
-                D = sp.spatial.distance.cdist(x_S.view(-1, 28*28).numpy(), X_k_S)
+                D = sp.spatial.distance.cdist(x_S.view(-1, 28*28).cpu().numpy(), X_k_S)
                 tau = np.percentile(D, 20)
                 targ_k = (D < tau).mean(1)
                 targs[:,k] = targ_k

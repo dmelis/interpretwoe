@@ -3,6 +3,9 @@
 /data/
 .vector_cache/
 
+# Internal scripts
+scripts/send_to_janis.sh
+
 # Models
 /models/
 
