@@ -46,6 +46,8 @@ def parse_args():
     parser.add_argument('--attrib_padding', type=int, default=4, help='Padding around input image to define attributes')
 
     # Explainer
+    parser.add_argument('--paradigm', type=str, choices = ['likelihood', 'hybrid', 'classification'],
+                            default='likelihood', help='Probabilistic explanation paradigm')    
     parser.add_argument('--mce_reg_type', type=str, choices=['decay','poly-centered'],
                         default='decay', help='Type of regularization for explainer scoring function objective')
     parser.add_argument('--mce_alpha', type=float,
@@ -56,6 +58,7 @@ def parse_args():
     # device
     parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu' )
     parser.add_argument('--debug', action='store_true', default=False, help='debug mode' )
+    parser.add_argument('--seed', type = int, default=2018, help='set seed. Choose -1 for no seed.' )
 
     # learning
     parser.add_argument('--optim', type=str, default='adam', help='optim method [default: adam]')
@@ -83,9 +86,11 @@ def parse_args():
 
 
 def main():
+    args = parse_args()
     if args.seed > 0:
         np.random.seed(args.seed)
-    args = parse_args()
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
     model_path, log_path, results_path = generate_dir_names('hasy', args)
 
     ### LOAD DATA

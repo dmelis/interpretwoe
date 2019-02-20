@@ -1,6 +1,7 @@
 import os
 from tqdm import tqdm
 import numpy as np
+import pdb
 import torch
 import torchvision
 from torchvision.datasets import MNIST
@@ -240,6 +241,7 @@ def load_ets_data(data_root = None, batch_sizes = (32, 256, 256),
         fields=[(None, None), ('text', TEXT),
                 ('label', LABEL), (None, None)])   # We ignore fist and last fields (id, score)
 
+    pdb.set_trace()
     # Get dynamic batch loaders for each fold (these take care of padding, etc)
     train_loader, val_loader, test_loader = tntdata.BucketIterator.splits(
         (train, val, test), sort_key=lambda x: len(x.text),

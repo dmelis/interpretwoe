@@ -5,7 +5,7 @@ import signal
 import time
 import pdb
 import torch
-from tqdm import tqdm
+
 import matplotlib.pyplot as plt
 
 try:
@@ -20,6 +20,12 @@ from .utils import plot_2d_attrib_entailment, plot_text_attrib_entailment
 from .methods import mnist_normalize, mnist_unnormalize
 
 KERNEL=detect_kernel()
+
+# TODO: FIXME - this was almost working, but need to install jupyter widgets
+# if KERNEL == 'ipython':
+#     from tqdm import tqdm_notebook as tqdm
+# else:
+#     from tqdm import tqdm
 
 ################################################################################
 #####################       Scoring functions      #############################
@@ -93,7 +99,7 @@ def normalized_deltas_old(hist, k = 10, alpha = 1):
     return m, C
 
 DEBUG = False
-def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='exp',
+def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='decay',
         argmin_reg = None, include_pred = True, verbose = False, **kwarg):
     """
         Computes:
@@ -121,8 +127,8 @@ def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='exp',
     scores = deltas - alpha*reg
     #print(scores)
     # Hack - dont want anything above k/2 card
-    if k > 3:
-        scores[int(k/2):] = float("-inf")
+    # if k > 3:
+    #     scores[int(k/2):] = float("-inf")
     if include_pred:
         #print(pred)
         ## index of pred class in (unsorted) hist
@@ -257,17 +263,20 @@ class Explanation(object):
 class MCExplainer(object):
     """
         Multi-step Contrastive Explainer.
+
+
+        - alpha, p are parameters for the explanation scoring function - see their description there
     """
     def __init__(self, classifier, mask_model, classes, loss_type = 'norm_delta',
-                reg_type = 'exp', crit_alpha=1, crit_p=1, plot_type = 'bar'):
+                reg_type = 'decay', alpha=1, p=1, plot_type = 'bar'):
         self.classifier = classifier
         self.mask_model = mask_model
         self.classes    = classes
         self.plot_type  = plot_type
         self.loss_type  = loss_type
         self.reg_type   = reg_type
-        self.crit_alpha = crit_alpha
-        self.crit_p     = crit_p
+        self.alpha      = alpha
+        self.p          = p
         self.task       = mask_model.task
         self.input_size = mask_model.input_size
         #self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
@@ -294,7 +303,7 @@ class MCExplainer(object):
 
         if loss == 'norm_delta':
             crit = partial(normalized_deltas, reg_type = self.reg_type,
-                    alpha=self.crit_alpha, p=self.crit_p, argmin_reg = None,
+                    alpha=self.alpha, p=self.p, argmin_reg = None,
                     include_pred= True)
         else:
             raise ValueError('Not implemented yet')
@@ -344,15 +353,10 @@ class MCExplainer(object):
         step = 0
         while len(V) > 1:
             print('Explanation step: ', step)
-            # if step == 5:
-            #     #show_plot = 2
-            #     verbose = 2
-            #     global DEBUG
-            #     DEBUG=True
 
             if verbose > 1:
                 print(V)
-            #pdb.set_trace()
+
             #max_S, max_C, hist_V = # Once attrib_optimizer is created at init with partial: self.attrib_optimizer(x, V, show_plot = show_plot, verbose = max(0, verbose-1))
             if self.task in ['mnist', 'hasy', 'leafsnap']:
                 max_S, max_C, hist_V = self.optimize_over_rectangle_attributes(
@@ -443,10 +447,10 @@ class MCExplainer(object):
 
         #signal.signal(signal.SIGINT, handler)
         #print(KERNEL)
-        pbar = tqdm(total=(W-w)*(H-h))
+        if KERNEL == 'terminal': pbar = tqdm(total=(W-w)*(H-h))
         for (ii,jj) in itertools.product(range(0, W-w),range(0,H-h)):
                 #print(ii,jj)
-                pbar.update(1)
+                if KERNEL == 'terminal': pbar.update(1)
                 S = np.s_[ii:min(ii+h,H),jj:min(jj+w,W)]
                 X_s, X_s_plot = masker(x, S)
                 output = model(X_s)
@@ -495,7 +499,7 @@ class MCExplainer(object):
                     max_obj = obj
                     max_S   = S
 
-        pbar.close()
+        if KERNEL == 'terminal': pbar.close()
         if max_S is None:
             print('Warning: could not find any attribute that causes the predicted class be entailed')
             return None, None, None
