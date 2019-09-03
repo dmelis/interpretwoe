@@ -5,6 +5,7 @@
 
 # Internal scripts
 scripts/send_to_janis.sh
+scripts/send_to_orava.sh
 
 # Models
 /models/

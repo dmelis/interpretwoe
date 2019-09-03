@@ -283,8 +283,8 @@ def plot_confusion_matrix(cm, classes,
     plt.xlabel('Predicted label')
 
 #
-def attrib_barplot(hist, C, classes, topk=10, class_names=None, ax = None,
-                   sort_bars = True, pc =None):
+def attrib_barplot(hist, C, classes, topk=10, cumhist=None, class_names=None, ax = None,
+                   sort_bars = True, score = None, score_type = 'cumprob'):
     if ax is None:
         ax = plt.gca()
 
@@ -307,15 +307,63 @@ def attrib_barplot(hist, C, classes, topk=10, class_names=None, ax = None,
         ticklabs  = [str(a) for a in classes]
     rotation = 90 if np.max(np.array([len(l) for l in ticklabs])) else 0
     bar = ax.bar(ticklabs,hist)
+    # if cumhist is not None:
+    #     print('here')
+    #     print(cumhist)
+    #     print(asd.asd)
+        #ax.bar()
     ax.set_xticks(range(nbars))
     ax.set_xticklabels(ticklabs, rotation = rotation)
     if sort_bars and not (topk < len(hist)) and (len(C) <= topk):
         # Draw separation lineself.
         #This only makes sense if (i) histogram is shown sorted, |C| < topk
         ax.axvline(x=len(C)-0.5, c ='red')
-        if pc is not None:
-            ax.text(len(C), 0.75*ax.get_ylim()[1], "P(C)/P(V)= %.2f" % pc, fontdict = {'color': 'red'},
-            rotation=90, verticalalignment='center')#, transform = ax[ncol-1].transAxes)
+        if score is not None:
+            ttext =  r"P(C)/P(V)= %.2f" % score if score_type == 'cumprob' else r"woe(C:V\C ; X)= %.2f" % score
+            ax.text(len(C), 0.75*ax.get_ylim()[1], ttext, fontdict = {'color': 'red'},
+            #rotation=90,
+            verticalalignment='center')#, transform = ax[ncol-1].transAxes)
+
+def plot_attribute(x, block_idxs, title = None, ax = None, rgba = False, grey_out_rest=True):
+    """
+        x should be an image of size w x w.
+        This assumes block_idxs are also squared.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    input_w = x.shape[0]
+    block_w = int(np.sqrt(len(block_idxs)))
+
+    ximg = x.clone()
+
+    mask = torch.zeros(input_w*input_w, dtype=torch.uint8)
+    mask[block_idxs] = torch.tensor(True)
+
+    if grey_out_rest:
+        if rgba:
+            ximg[:,3].view(-1)[mask^1] *= 0.5
+        else:
+            ximg.view(-1)[mask^1] *= 0.05
+
+    if rgba:
+        ax.imshow(ximg.reshape(input_w,input_w, 4))
+    else:
+        ax.imshow(ximg.reshape(input_w,input_w), cmap = 'Greys', vmin = 0, vmax = 1)
+
+    plt.axis('on')
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_aspect('equal')
+
+    ii, jj = np.unravel_index(min(block_idxs), (input_w,input_w))
+    w, h   = block_w, block_w
+    rects = patches.Rectangle((jj-.5,ii-.5),w,h,linewidth=1,edgecolor='r',facecolor='none')
+    ax.add_patch(rects)
+    if title:
+        ax.set_title(title)
+    #title = '{:2.2f}'.format(partial_woes[bidx])
+    #ax.set_title('Woe ' + title + ' ({}/{})'.format(woe_ranks[bidx], nblocks))
 
 
 def plot_text_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
@@ -388,7 +436,7 @@ def plot_text_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
         plt.suptitle(title, fontsize = 18)
     return ax
 
-def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
+def plot_2d_attrib_entailment(x, xs, S, C, V, hist, cumhist = None, woe = None, plot_type = 'bar',
               title = None, show_cropped = True,
               sort_bars = True, topk = 10, class_names = None, cmap = 'Greys',
               ax = None, ims = None, return_elements = False, save_path = None):
@@ -404,7 +452,6 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
         ncol = len(ax)
         #redraw = len(ax[0].images) == 0
 
-        #pdb.set_trace()
 
     # if timeout:
     #     print('here')
@@ -414,7 +461,7 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     #     timer.add_callback(close_event)
     #     timer.start()
 
-    if type(V) is list:
+    if type(V) in [list, tuple]:
         V = np.array(V)
 
     # Infer some aspects of input and mask
@@ -427,7 +474,6 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     h, w   = len(S_x), len(S_y)
 
     #ax[0].axis('off')
-    #pdb.set_trace()
     if ims is None:
         im0 = ax[0].imshow(x.reshape(H, W),  aspect="auto", cmap = cmap)#, cmap='Greys_r')
         ax[0].set_xticks([])
@@ -453,11 +499,16 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
     try:
         C_idxs = [np.where(V == k)[0][0] for k in C]
     except:
+        print('Failed C_idxs')
         pdb.set_trace()
 
-    pc = hist[C_idxs].sum()
-    # Make pc relative
-    pc = pc / (hist.sum())
+    if woe is not None:
+        hyp_score = woe
+        score_type = 'woe'
+    else:
+        # Score will be P(C) / P(V)
+        hyp_score = hist[C_idxs].sum() / (hist.sum())
+        score_type = 'cumprob'
 
     ### Third pane shows entailed classes
     if sort_bars or (plot_type == 'treemap'): # treemap always need sorted vals
@@ -467,12 +518,13 @@ def plot_2d_attrib_entailment(x, xs, S, C, V, hist, plot_type = 'bar',
         classes = classes[arridx]
 
     if plot_type == 'bar':
-        attrib_barplot(hist, C, classes, class_names=class_names, topk = topk, ax = ax[ncol-1], pc = pc)
+        attrib_barplot(hist, C, classes, class_names=class_names, topk = topk, cumhist = cumhist,
+        ax = ax[ncol-1], score = hyp_score, score_type = score_type)
     elif plot_type == 'treemap':
         eff_topk = max(min(2*topk, len(C)), 10)
         labels = [class_names[a] for a in classes[:eff_topk]]
         treemap_boundary(hist, boundary = len(C), label = labels, ax= ax[ncol-1],
-                         dynamic_fontsize=True, pc = pc)
+                         dynamic_fontsize=True, score = hyp_score, score_type = score_type)
 
     ax[ncol-1].set_title(r'$|V| = {}$, $|C| = {}$'.format(len(V),len(C)), fontsize = 14)
 
@@ -502,7 +554,7 @@ def plot_line(ax, ob):
 
 def treemap_boundary(sizes, boundary = None, norm_x = 100, norm_y = 100, topk = None,
                     value = None, dynamic_fontsize = False, label = None,
-                    pc = None, ax = None, **kwargs):
+                    score = None, score_type = 'cumprob', ax = None, **kwargs):
     """
         Essentially, same as squarify.plot with the following changes:
          - custom (insetead of random) cmap
@@ -552,8 +604,10 @@ def treemap_boundary(sizes, boundary = None, norm_x = 100, norm_y = 100, topk = 
             fs = 0.9*min(dx,dy) if dynamic_fontsize else 10
             ax.text(x + dx / 2, y + dy / 2, l, va=va, ha='center', fontsize = fs)
 
-    if pc is not None:
-        ax.text(0, -5, r"$P(C)/P(V)$= %.2f" % pc, fontdict = {'color': 'red'})
+    if score and score_type == 'cumprob':
+        ax.text(0, -5, r"$P(C)/P(V)$= %.2f" % score, fontdict = {'color': 'red'})
+    elif score and score_type == 'woe':
+        ax.text(0, -5, r"woe(C:V\C ; X)= %.2f" % score, fontdict = {'color': 'red'})
 
     return ax
 
