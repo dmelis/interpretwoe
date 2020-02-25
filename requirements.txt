@@ -8,6 +8,10 @@ shapely
 squarify
 torchnet
 watermark
+attrdict
+scikit-learn
+Pillow # For displaying images in notebooks
+colored # Display
 
 # Optional NLP tools (needed for NLP task)
 nltk

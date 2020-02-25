@@ -1,13 +1,13 @@
 import sys
 import numpy as np
+import pandas as pd
 from functools import partial
 from attrdict import AttrDict
 import itertools
 import signal
 import time
-import pdb
-import torch
 from tqdm import tqdm
+import colored
 
 import matplotlib.pyplot as plt
 
@@ -16,12 +16,16 @@ try:
 except ImportError:
     pass # or set "
 
+import pdb
 
-# Local
+
+### Localß
 from .utils import detect_kernel
 from .utils import plot_2d_attrib_entailment, plot_text_attrib_entailment, plot_attribute
-from .methods import mnist_normalize, mnist_unnormalize
+from .utils import annotate_group, range_plot
+#from .methods import mnist_normalize, mnist_unnormalize
 from .woe_utils import invlogit
+from .scoring import normalized_deltas
 
 KERNEL=detect_kernel()
 
@@ -31,190 +35,96 @@ KERNEL=detect_kernel()
 # else:
 #     from tqdm import tqdm
 
-################################################################################
-#####################       Scoring functions      #############################
-################################################################################
 
-# For MNIST, there are (28 - w)*(28 - h) overlapping squares to choose from
-def delta_fun(hist):
-    vals, inds = hist.sort(descending=True)
-    return (vals[:,:-1] - vals[:,1:]).max()
+class WoEExplanation(object):
+    def __init__(self, pred_y, pred_prob, true_y, h_entailed, h_contrast,
+                base_lods, total_woe, attwoes, attrib_names, threshold=2):
+        self.prnt_colors = {'pos': 'green',   'neu': 'grey_50', 'neg': 'red'}
+        #self.prnt_colors = ['green', 'grey_50','red']
+        self.plot_colors = {'pos': '#3C8ABE', 'neu': '#808080', 'neg': '#CF5246'}
 
-def entreg_delta_fun(hist, alpha=.1):
-    vals, inds = hist.sort(descending=True)
-    return delta_fun(vals) - alpha*(vals - vals.log()).sum(dim=1)
+        self.base_lods = base_lods
+        self.attrib_names = attrib_names
+        self.pred_y = pred_y
+        self.true_y = true_y
+        self.pred_prob = pred_prob
+        self.attwoes = attwoes
+        self.total_woe = total_woe
+        self.h_entailed = h_entailed
+        self.h_contrast = h_contrast
+        self.τ = threshold
 
-def cumul_delta_fun(hist, verbose = False):
-    vals, inds = hist.sort(descending=True)
-    s       = torch.cumsum(vals, dim=1)
-    vals, inds = hist.sort(descending=False)
-    s_compl = torch.cumsum(vals, dim=1)
+        self.sorted_attwoes = [(i,x) for x,i in sorted(zip(attwoes,range(len(self.attrib_names))), reverse=True)]
 
-    #s_diff = s - s_compl.flip(dim=1) # flip in pytorch Not yet implemented https://github.com/pytorch/pytorch/pull/7873
-    s_diff = s.detach().numpy()[:,:-1] - np.flip(s_compl.detach().numpy(),1)[:,1:]
-    m, argm = torch.Tensor(s_diff).max(dim=1)
-    if verbose:
-        print(hist)
-        print(s)
-        print(np.flip(s_compl.detach().numpy(),1))
-        print(s_diff)
-        print(m, argm)
-    return m
-
-def normalized_power(hist, k = 10, alpha = .75, verbose = True):
-    # P(c)
-    vals, inds = hist.sort(descending=True)
-    P_c        = torch.cumsum(vals[:,:-1], dim=1) #/torch.pow(torch.range(1,9),0.5)
-    print('Probs:   ', P_c[0].detach().numpy())
-    Cards      = torch.range(1,k-1) # We dont care about no trivial partitions l=0,k
-    reg = torch.pow(torch.abs(Cards - k/2)*(2/k), 2)
-    print('Reg Term:', reg.detach().numpy())
-    scores = P_c - alpha*reg
-    # Hack - dont want anything above k/2 card
-    scores[:,int(k/2):] = 0
-    print(scores)
-    m, argm = scores.max(dim=1)
-    C = inds[0,:argm+1]
-    print(m, argm)
-    if len(C) == 0:
-        pdb.set_trace()
-    #print(asd.asd)
-    return m, C
-
-def normalized_deltas_old(hist, k = 10, alpha = 1):
-    vals, inds = hist.sort(descending=True)
-    deltas  = vals[:,:-1] - vals[:,1:]
-    print('Deltas:   ', deltas[0].detach().numpy())
-    Cards      = torch.range(1,k-1) # We dont care about no trivial partitions l=0,k
-    #reg = torch.pow(torch.abs(Cards - k/2)*(2/k), 3)
-    reg = 1/torch.pow(Cards,2)
-    print('Reg Term:', reg.detach().numpy())
-    scores = deltas - alpha*reg
-    # Hack - dont want anything above k/2 card
-    scores[:,int(k/2):] = 0
-    print(scores)
-    m, argm = scores.max(dim=1)
-    C = inds[0,:argm+1]
-    print(m, argm)
-    print(C)
-    if len(C) == 0:
-        pdb.set_trace()
-    #print(asd.asd)
-    return m, C
-
-DEBUG = False
-def normalized_deltas(hist, pred, alpha = 1, p = 2, reg_type='decay',
-        argmin_reg = None, include_pred = True, verbose = False, **kwarg):
-    """
-        Computes:
-    """
-    true_k = len(hist)     # True ground set cardinality
-    k = len(hist)
-
-    # Values need to be sorted for delta computation
-    inds = hist.argsort()[::-1]
-    vals = hist[inds]
-
-    deltas  = vals[:-1] - vals[1:]
-    Cards = np.arange(1,k) # numpy and torch range have different behavior for top end of intervaal!
-    if reg_type == 'decay':
-        reg = 1/np.power(Cards,p)
-    elif reg_type == 'poly-centered':
-        argmin = (k+1)/2 if argmin_reg is None else argmin_reg
-        #print(argmin)
-        maxp   = max(np.abs((1 - argmin))**p, np.abs((len(Cards) - argmin))**p)
-        reg = (np.abs(Cards - argmin)**p)/maxp  # Denom normalizes so that maxreg = 1
-    else:
-        raise ValueError('Unrecognized mode in normalized deltas')
-        #reg = torch.pow(torch.abs(Cards - k/2)*(2/k), 3)
-
-    scores = deltas - alpha*reg
-    #print(scores)
-    # Hack - dont want anything above k/2 card
-    # if k > 3:
-    #     scores[int(k/2):] = float("-inf")
-    if include_pred:
-        #print(pred)
-        ## index of pred class in (unsorted) hist
-        pred_idx = np.where(kwarg['V'] == pred)[0][0]
-        #print(pred_idx)
-        ## index of pred class in sorted hist
-        cut_val = np.where(inds == pred_idx)[0][0]
-        #print(cut_val)
-        scores[cut_val+1:] = float("-inf")
-        if DEBUG:
-            print('d')
-            print(cut_val, scores)
+        # TODO: Maybe pass attwoes as dict, so we get names for free?
 
 
-    #m, argm = scores.max(dim=0)  #torc hversion
-    argm = scores.argmax()
-    m    = scores.max()
+    def __repr__(self):
+        self.print()
+        return ""
 
-    C = inds[:argm+1]
-    if len(C) == 0:
-        pdb.set_trace()
-    #print(asd.asd)
-    # Map back to original indices of classes
-    #C_orig = [classes[i] for i in C] if subs_k < true_k else C
-    #else:
-    #print('Selected classes (fake index)', C)
-    #print(k, scores)
-    return m, C
+    def print(self):#, idx, p, prob, y, y_num, y_den, prior, total_woe      sorted_partial_woes, threshold):
+        #pname = self.class_names[p] # predicted class
+        #yname = self.class_names[y] # true class
+        #hname = self.class_names[y_num] # denominator in woe
+        print('Prediction: {} (p={:2.2f})'.format(self.pred_y, self.pred_prob))
+        print('True class: {}'.format(self.true_y))
+        print('Bayes odds explanation:\n')
+        print('   {:8.2f}     =        {:8.2f}  +  {:<8.2f}'.format(self.base_lods + self.total_woe, self.base_lods, self.total_woe))
+        print('post. log-odds  =  prior log-odds  +  total_woe')
+        print('\nTotal WoE in favor of "{}": {:8.2f}'.format(self.h_entailed, self.total_woe))
 
+        colors = [self.prnt_colors[k] for k in ['pos', 'neu', 'neg']]
+        ci = 0
+        woesum = 0
+        for i,woe in self.sorted_attwoes:
+            #if np.abs(woe) < threshold: continue
+            if ci == 0 and woe < self.τ: ci +=1
+            if ci == 1 and woe < -self.τ: ci +=1
+            print(colored.fg(colors[ci]) + 'woe({:>20}) = {:8.2f}'.format(self.attrib_names[i], woe))
+            woesum += woe
+        print(colored.attr('reset') + '     {:>20} = {:8.2f}'.format('sum', woesum))
 
-################################################################################
+    def plot(self, figsize=(5,4), ax = None, show = True, save_path = None):
+        if not ax:
+            fig, ax = plt.subplots(figsize=figsize)
 
+        attrib_ord, woe = list(zip(*self.sorted_attwoes))
+        woe = np.array([self.base_lods] + list(woe))
+        categories = ['PRIOR LOG-ODDS'] + [self.attrib_names[i] for i in attrib_ord]
+        y_pos = np.arange(len(self.attrib_names)+1)
 
-def ets_masker(x, S, max_len = None):
-    if max_len is None:
-        max_len = x.squeeze().shape[0]
-    #mask = torch.zeros(1, max_len).byte() # Batch version
-    mask = torch.zeros(max_len).byte() # Batch version
-    mask[S] = 1
-    #X_masked = torch.masked_select(x, mask).view(x.shape[0], -1) # Batch very
-    X_masked = torch.masked_select(x,mask).view(x.shape[0], -1)
-    return X_masked
+        pos = woe >= self.τ
+        neg = woe <= -self.τ
+        neu  = (woe > -self.τ) & (woe < self.τ)
+        if np.any(pos): ax.barh(y_pos[pos], woe[pos], align='center', color = self.plot_colors['pos'])
+        if np.any(neu):  ax.barh(y_pos[neu], woe[neu], align='center', color = self.plot_colors['neu'])
+        if np.any(neg): ax.barh(y_pos[neg], woe[neg], align='center', color = self.plot_colors['neg'])
 
-def mnist_masker(x, S, H = 28, W = 28):
-    """
-        Should deprecate in favor of more general image_masker below
-    """
-    ii = list(range(H)[S[0]])[0]
-    jj = list(range(W)[S[1]])[0]
-    mask = torch.zeros(H, W) # FIXME: SHOULD BE TRUE ZERO
-    mask[S[0],S[1]] = 1
-    ### unnormalize should be abstracted away - be part of woe_model and classif respectively?
-    ### or maybe of dataset class
-    X_s = mnist_unnormalize(x)*mask.view(1,1,H,W).repeat(x.shape[0], 1, 1, 1)
-    X_plot  = X_s
-    X_input = mnist_normalize(X_s)
-    return X_input, X_plot
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(categories)
+        ax.invert_yaxis()  # labels read top-to-bottom
+        #ax.set_xlabel('Weight-of-Evidence')
+        ax.set_title('Per-Attribute Weight of Evidence')
+        ax.set_xlim(-1+min(np.min(self.attwoes),-6), max(6,np.max(self.attwoes))+1)
+        ax.axvline(2, alpha = 0.5, color = 'k', linestyle = '--')
+        ax.axvline(0, alpha = 1, color = 'k', linestyle = '-')
+        ax.axvline(-2, alpha = 0.5, color = 'k', linestyle = '--')
+        ax.axhline(0.5, alpha=0.5, color='red', linestyle = ':')
+        #ax.text(-2.5,0,'significative against',horizontalalignment='right')
 
+        print()
 
-def image_masker(x, S, H = 32, W = 32, normalized = False, alpha = 0):
-    """
-        Should work for other tasks where we don't prenormalize. Considering renaming
-        to something more general.
+        annotate_group('Significant\nAgainst', (ax.get_xlim()[0],-self.τ), ax)
+        annotate_group('Neutral\nLow Sign.', (-self.τ, self.τ), ax)
+        annotate_group('Significant\nIn Favor', (self.τ,ax.get_xlim()[1]), ax)
 
-        Since input doesn't require normalization, X_plot and X_input are the same.
-    """
-    ii = list(range(H)[S[0]])[0]
-    jj = list(range(W)[S[1]])[0]
-    mask = torch.zeros(H, W) + alpha# FIXME: SHOULD BE TRUE ZERO
-    mask[S[0],S[1]] = 1
-    if normalized:
-        X_s = mnist_unnormalize(x)*mask.view(1,1,H,W).repeat(x.shape[0], 1, 1, 1)
-        X_plot  = X_s
-        X_input = mnist_normalize(X_s)
-    else:
-        X_s = x*mask.view(1,1,H,W).repeat(x.shape[0], 1, 1, 1)
-    return X_s, X_s
+        if save_path:
+            plt.savefig(save_path + '_expl.pdf', bbox_inches = 'tight', format='pdf', dpi=300)
+        if show:
+            plt.show()
 
-
-################################################################################
-
-
+        return ax
 
 class Explanation(object):
     def __init__(self, x, y, classes, masker = None, task = None, **kwargs):
@@ -226,7 +136,6 @@ class Explanation(object):
         self.task   = task   # Must be passed when instantiating Explanation
         # For text tasks
         self.vocab = kwargs['vocab'] if 'vocab' in kwargs else None
-
 
     def plot(self, plot_type = 'treemap', mask_alpha = 0, save_path = None):
         """
@@ -280,16 +189,17 @@ class Explanation(object):
         print('Done!')
 
 
-
 class Explainer(object):
     """
         Parent class for explainers.
 
     """
-    def __init__(self, task, input_size, classifier, classes, loss_type, reg_type, alpha, p, plot_type):
+    def __init__(self, classifier, classes, features, task, X, Y, input_size,  loss_type, reg_type, alpha, p, plot_type):
         self.task = task
+        self.X, self.Y = X,Y # usually training data, for plotting / viz purposes
         self.classifier = classifier
         self.classes    = classes
+        self.features   = features
         self.plot_type  = plot_type
         self.loss_type  = loss_type
         self.reg_type   = reg_type
@@ -324,19 +234,26 @@ class WOE_Explainer(Explainer):
 
         - alpha, p are parameters for the explanation scoring function - see their description there
     """
-    def __init__(self, task, input_size, classifier, woe_model, classes, loss_type = 'norm_delta',
+    def __init__(self, classifier, woe_model, X=None, Y=None, classes=None, features=None,
+                attribute_idxs=None,
+                attribute_names = None,
+                task='tabular',
+                input_size=None,  loss_type = 'norm_delta',
                 reg_type = 'decay', alpha=1, p=1, plot_type = 'bar'):
-        super().__init__(task, input_size, classifier, classes, loss_type, reg_type, alpha, p, plot_type)
+        super().__init__(classifier, classes, features, task, X, Y, input_size, loss_type, reg_type, alpha, p, plot_type)
 
-        self.woe_model = woe_model
-        # self.classifier = classifier
-        # self.woe_model = woe_model
-        # self.classes    = classes
+        self.woe_model  = woe_model
+        self.attribute_idxs = attribute_idxs
+        self.attribute_names = attribute_names
+        # TODO: maybe combine into dict, but we need to maintain order of keys!
+        #self.attributes = attributes # dict with 'attrib_name': [indices] pairs
+
+
         # self.plot_type  = plot_type
         # self.loss_type  = loss_type
         # self.reg_type   = reg_type
-        self.alpha      = alpha
-        self.p          = p
+        #self.alpha      = alpha
+        #self.p          = p
         # self.task       = woe_model.task
         # self.input_size = woe_model.input_size
         #self.input_size = woe_model.image_size # Legacy. Replace by above once new models trainerd.
@@ -353,12 +270,176 @@ class WOE_Explainer(Explainer):
         elif self.task == 'ets':
             self.masker = ets_masker
             self.input_type = 'text'
+        elif self.task == 'tabular':
+            self.masker = None
+            self.input_type = 'tabular'
         else:
             raise ValueError('Unrecognized task.')
         self.criterion = self._init_criterion()
 
-    @torch.no_grad()
-    def explain(self, x, y = None, verbose = False, show_plot = 1, max_attrib = 5, save_path = None):
+    def explain(self, x, y, idx = 0, threshold = 2, show_ranges=True, range_group='split', totext=True):
+        # TODO: Generalize. Can we present explanations for all elements in batch
+        # like interpml does? Instead of having to choose idx.
+        #pred_class = self.classifier(x)
+        idx = 0
+        pred_class = self.classifier.predict(x)
+        pred_proba = self.classifier.predict_proba(x)
+
+        # TODO: Generalize to multiclass
+        y_num = 0
+        y_den = 1
+
+        ### Total WOE and Prior Odds
+        total_woe  = self.woe_model.woe(x, y_num, y_den)
+        prior_odds = self.woe_model.prior_odds(y_num, y_den)
+
+        ### Compute Per-Attribute WoE Scores
+        attrwoes = []
+        for i,idxs in enumerate(self.attribute_idxs):
+            attrwoes.append(self.woe_model.woe(x, y_num, y_den, subset = idxs))
+        attrwoes = np.array(attrwoes).T
+        #sorted_attrwoes= [(i,x) for x,i in sorted(zip(attrwoes[idx],range(len(self.attribute_names))), reverse=True)]
+
+        ### NEW: Compute also per-feature woe for plot
+        featwoes = []
+        for i in range(x.shape[1]):
+            featwoes.append(self.woe_model.woe(x, y_num, y_den, subset = [i]))
+        featwoes = np.array(featwoes).T
+
+        ### Print terminal-friendly explanation - before I created the WoeExplanation class
+        # self.print_explanation(idx, pred_class[idx], pred_proba[idx,pred_class[idx]], y[idx],
+        #                        y_num,y_den, prior_odds, total_woe[idx],
+        #                        sorted_partial_woes, threshold)
+
+        # ### Compare value of most informative attrib to mean values per class
+        # if hasattr(self.classifier, 'theta_'):
+        # # Maybe instead make class means a property of the woe model, change to:
+        # #if hasattr(self.woe_model, 'class_means')
+        #     top_attrib      = np.argmax(np.abs(attrwoes), axis=1)[idx]
+        #     top_attrib_idxs = self.attribute_idxs[top_attrib]
+        #     vals_top_attrib = x[0,top_attrib_idxs]
+        #     top_attrib_name = self.attribute_names[top_attrib]
+        #     print('\nAverage "{}" value for {} examples =\n\t{}'.format(top_attrib_name, self.classes[y_num],self.classifier.theta_[y_num, top_attrib_idxs]))
+        #     print('Average "{}" value for {} examples =\n\t{}'.format(top_attrib_name, self.classes[y_den],self.classifier.theta_[y_den, top_attrib_idxs]))
+        #     print('Value of "{}" in this example =\n\t{}'.format(top_attrib_name, vals_top_attrib))
+
+        ### Create Explanation
+        print('Example index: {}'.format(idx))
+        expl = WoEExplanation(self.classes[pred_class[idx]], pred_proba[idx,pred_class[idx]],
+                              self.classes[y[idx]], self.classes[y_num], self.classes[y_den],
+                              prior_odds, total_woe[idx], attrwoes[idx],
+                              self.attribute_names)
+        if totext: expl.print()
+
+        featexpl =  WoEExplanation(self.classes[pred_class[idx]], pred_proba[idx,pred_class[idx]],
+                              self.classes[y[idx]], self.classes[y_num], self.classes[y_den],
+                              prior_odds, total_woe[idx], featwoes[idx],
+                              self.features)
+
+        ncol = 2 if show_ranges else 1
+        fig, ax = plt.subplots(1,ncol, figsize=(6*ncol, 10))
+        ax0 = ax[0] if show_ranges else ax
+        ax0 = expl.plot(ax=ax0, show=False)
+        if show_ranges:
+            # Sort Features by order of their attribute in first plot
+            feat_order = np.hstack([self.attribute_idxs[i] for i,_ in expl.sorted_attwoes])
+
+            if range_group == 'entailed':
+                mask = self.Y == y_num # show ranges for the entailed hyp
+                groupby = None
+            elif range_group == 'rejected':
+                mask = self.Y == y_den # show ranges for rejected hyp
+                groupby = None
+            elif range_group == 'split':
+                mask = range(self.X.shape[0]) # no filter
+                groupby = [self.classes[i] for i in self.Y]
+
+            #pnt_labels = ['{:2.2f}'.format(w) for w in featwoes[idx][feat_order]]
+            pnt_labels = featwoes[idx][feat_order]
+            ax1 = range_plot(self.X[mask][:,feat_order], x[idx, feat_order],
+                             colnames = self.features[feat_order], groups=groupby,
+                             x0_labels=pnt_labels, plottype='box', ax = ax[1])
+            ax1.set_title('Feature values of explained example vs {} class'.format(range_group))
+
+            offset = -0.5
+            #for i in range(1,len(self.attribute_names)):
+            for i in np.argsort(attrwoes[0])[::-1]:
+                new_offset = offset + len(self.attribute_idxs[i])
+                ax1.axhline(new_offset, alpha=0.5, color='gray', linestyle = ':')
+                annotate_group(self.attribute_names[i].replace(' ','\n'), (offset, new_offset), ax1, orient='v')
+                offset = new_offset
+
+        plt.tight_layout()
+        plt.show()
+        #featexpl.print()
+        return expl
+
+    def plot_explanation(self, sorted_partial_woes, figsize = (4,3)):
+        fig, ax = plt.subplots(figsize=figsize)
+        color_pos, color_neu, color_neg = '#3C8ABE', '#808080','#CF5246'
+        attrib_ord, woe = list(zip(*sorted_partial_woes))
+        woe = np.array([base_logodds] + list(woe))
+        categories = ['PRIOR LOG-ODDS'] + [attribute_names[i] for i in attrib_ord]
+        y_pos = np.arange(len(attribute_names)+1)
+
+        positive = woe >= threshold
+        negative = woe <= -threshold
+        neutral  = (woe > -threshold) & (woe < threshold)
+        if np.any(positive): ax.barh(y_pos[positive], woe[positive], align='center', color = color_pos)
+        if np.any(neutral): ax.barh(y_pos[neutral], woe[neutral], align='center', color = color_neu)
+        if np.any(negative): ax.barh(y_pos[negative], woe[negative], align='center', color = color_neg)
+
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(categories)
+        ax.invert_yaxis()  # labels read top-to-bottom
+        #ax.set_xlabel('Weight-of-Evidence')
+        ax.set_title('Per-Attribute Weight of Evidence')
+        ax.set_xlim(-1+min(np.min(partial_woes),-6), max(6,np.max(partial_woes))+1)
+        ax.axvline(2, alpha = 0.5, color = 'k', linestyle = '--')
+        ax.axvline(0, alpha = 1, color = 'k', linestyle = '-')
+        ax.axvline(-2, alpha = 0.5, color = 'k', linestyle = '--')
+        ax.axhline(0.5, alpha=0.5, color='red', linestyle = ':')
+        #ax.text(-2.5,0,'significative against',horizontalalignment='right')
+
+        print()
+
+        annotate_group('Significant\nAgainst', (ax.get_xlim()[0],-threshold), ax)
+        annotate_group('Neutral\nLow Sign.', (-threshold, threshold), ax)
+        annotate_group('Significant\nIn Favor', (threshold,ax.get_xlim()[1]), ax)
+        if save_path:
+            plt.savefig(save_path + '_expl.pdf', bbox_inches = 'tight', format='pdf', dpi=300)
+        plt.show()
+
+
+    def print_explanation(self, idx, p, prob, y, y_num, y_den, prior, total_woe,
+                          sorted_partial_woes, threshold):
+        pname = self.classes[p] # predicted class
+        yname = self.classes[y] # true class
+        hname = self.classes[y_num] # denominator in woe
+        print('Example index: {}'.format(idx))
+        print('Prediction: {} (p={:2.2f})'.format(pname, prob))
+        print('True class: {}'.format(yname))
+        print('Bayes odds explanation:\n')
+        print('   {:8.2f}     =        {:8.2f}  +  {:<8.2f}'.format(prior + total_woe, prior, total_woe))
+        print('post. log-odds  =  prior log-odds  +  total_woe')
+        print('\nTotal WoE in favor of "{}": {:8.2f}'.format(hname, total_woe))
+        color_pos, color_neu, color_neg = 'green', 'grey_50','red'
+        colors = [color_pos,color_neu,color_neg]
+        ci = 0
+        woesum = 0
+        for i,woe in sorted_partial_woes:
+            #if np.abs(woe) < threshold: continue
+            if ci == 0 and woe < threshold: ci +=1
+            if ci == 1 and woe < -threshold: ci +=1
+            print(colored.fg(colors[ci]) + 'woe({:>20}) = {:8.2f}'.format(self.attribute_names[i], woe))
+            woesum += woe
+        print(colored.attr('reset') + '     {:>20} = {:8.2f}'.format('sum', woesum))
+
+
+
+
+    #@torch.no_grad()  ##FIXME - how to do this without global torch import
+    def torchexplain(self, x, y = None, show_plot = 1, max_attrib = 5, save_path = None, verbose = False):
         # if y not provided, call classif model
         if y is None:
             out = self.classifier(x)
@@ -803,427 +884,3 @@ class WOE_Explainer(Explainer):
         else:
             print(labstr)
         return max_S, max_C, hist_V
-
-
-
-
-
-
-class MCExplainer(object):
-    """
-        Multi-step Contrastive Explainer.
-
-
-        - alpha, p are parameters for the explanation scoring function - see their description there
-    """
-    def __init__(self, classifier, mask_model, classes, loss_type = 'norm_delta',
-                reg_type = 'decay', alpha=1, p=1, plot_type = 'bar'):
-        self.classifier = classifier
-        self.mask_model = mask_model
-        self.classes    = classes
-        self.plot_type  = plot_type
-        self.loss_type  = loss_type
-        self.reg_type   = reg_type
-        self.alpha      = alpha
-        self.p          = p
-        self.task       = mask_model.task
-        self.input_size = mask_model.input_size
-        #self.input_size = mask_model.image_size # Legacy. Replace by above once new models trainerd.
-        #self.pykernel   = detect_kernel()
-
-        if self.task == 'mnist':
-            self.masker = mnist_masker#, h = model.mask_size, w = model.mask_size)
-            self.input_type = 'image'
-        elif self.task in ['hasy', 'leafsnap']:
-            H, W = self.input_size
-            self.masker = partial(image_masker_unnormalized, H=H, W=W)# #partial(hasy_masker)#,  h = model.mask_size, w = model.mask_size)    )
-            self.input_type = 'image'
-        elif self.task == 'ets':
-            self.masker = ets_masker
-            self.input_type = 'text'
-        else:
-            raise ValueError('Unrecognized task.')
-        self.criterion = self._init_criterion()
-
-
-    def _init_criterion(self):
-
-        loss = self.loss_type
-
-        if loss == 'norm_delta':
-            crit = partial(normalized_deltas, reg_type = self.reg_type,
-                    alpha=self.alpha, p=self.p, argmin_reg = None,
-                    include_pred= True)
-        else:
-            raise ValueError('Not implemented yet')
-        #nclasses = len(V)
-
-        # if loss == 'euclidean':
-        #     # Target Histrogram
-        #     target_hist = torch.zeros(1, nclasses).detach()
-        #     target_hist[:,tgt_classes] = 1
-        #     target_hist /= target_hist.sum()
-        #     hist_loss  = (vals - target_hist).norm(p=p)
-        # elif loss == 'delta':
-        #     #hist_loss  = torch.abs(delta_fun(vals) - delta_fun(target_hist))
-        #     hist_loss = -delta_fun(vals) # Minus because want to maximize delta
-        # elif loss == 'cumul_delta':
-        #     hist_loss = -cumul_delta_fun(vals, verbose = verbose) # Minus because want to maximize delta
-        # elif loss == 'norm_power':
-        #     obj, C = normalized_power(vals)
-        #     hist_loss = -obj
-        # elif loss == 'norm_delta':
-        #     obj, C = normalized_deltas(vals)#, all_classes)
-        #     hist_loss = -obj
-
-        return crit
-
-    @torch.no_grad()
-    def explain(self, x, y = None, verbose = False, show_plot = 1, save_path = None):
-        # if y not provided, call classif model
-        if y is None:
-            out = self.classifier(x)
-            p, y = out.max(1)
-            y = y.item()
-
-        if show_plot > 1 and self.input_type == 'image':
-            plt.imshow(x.squeeze(), cmap='Greys')
-            plt.title('Prediction: ' + self.classes[y] + ' (class no.{})'.format(y), fontsize = 20)
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-        else:
-            print(y)
-            print(self.classes)
-            print('Prediction: ' + self.classes[y] + ' (class no.{})'.format(y))
-            #print('hasdasd')
-
-        V = list(range(len(self.classes)))
-        E = Explanation(x, y, self.classes, masker = self.masker, task = self.task)
-        step = 0
-        while len(V) > 1:
-            print('Explanation step: ', step)
-
-            if verbose > 1:
-                print(V)
-
-            #max_S, max_C, hist_V = # Once attrib_optimizer is created at init with partial: self.attrib_optimizer(x, V, show_plot = show_plot, verbose = max(0, verbose-1))
-            if self.task in ['mnist', 'hasy', 'leafsnap']:
-                max_S, max_C, hist_V = self.optimize_over_rectangle_attributes(
-                                        self.mask_model, self.criterion, self.masker,
-                                        x, y, V=V, tgt_classes = [2,3,4], sort_hist = False,
-                                        show_plot = show_plot, plot_type = self.plot_type,
-                                        loss = self.loss_type, class_names = self.classes,
-                                        force_include_class = y, verbose = max(0, verbose -1)
-                                        )
-            elif self.task == 'ets':
-                E.vocab = self.mask_model.vocab
-                max_S, max_C, hist_V = self.optimize_over_ngram_attributes(
-                                        self.mask_model, self.criterion, self.masker,
-                                        x, y, V=V, tgt_classes = [2,3,4], sort_hist = False,
-                                        show_plot = show_plot, plot_type = self.plot_type,
-                                        loss = self.loss_type, class_names = self.classes,
-                                        force_include_class = y, verbose = max(0, verbose -1)
-                                        )
-            else:
-                raise ValueError("Wrong task")
-            if max_S is None:
-                print('Explanation failed')
-                break
-            if verbose > 1:
-                print('Entailed classes: ')
-                print([self.classes[c] for c in max_C])
-
-            if len(max_C) == len(V) or len(max_C) == 0:
-                print('Here')
-                break
-
-            # Remove classes from reference set
-            V_prev = V.copy()
-            if y in max_C:
-                # predicted class in entailed set - keep that
-                V = [k for k in V if k in max_C]  # np version: np.isin(V, max_C)
-            else:
-                # predicted class not in entailed set, remove entailed set
-                V = [k for k in V if k not in max_C]
-            if verbose > 0:
-                print('Shrinking ground set: {} -> {}'.format(V_prev, V))
-
-            predicate = AttrDict({'S': max_S, 'hyp': C, 'null_hyp': list(set(V).difference(set(C))),
-                                  'hist': hist, 'V_prev': V_prev, 'V': V})
-
-
-            E.predicates.append(predicate)
-            step += 1
-
-        return E
-
-    #TODO: do we need static? Maybe make just normal with self, to avoid having to pass crit function
-    @staticmethod
-    def optimize_over_rectangle_attributes(model, criterion, masker, x, y, V = None, tgt_classes = [1,2],
-                                 sort_hist = False, show_plot = False, plot_type = 'treemap', class_names = None,
-                                 loss = 'euclidean', force_include_class = None, verbose = False):
-        """
-            Given masking model, input x and target histogram, finds subset of x (i.e., attribute)
-            that minimizes loss with respect to target historgram.
-
-             - V: ground set of possible classes
-            plot: 0/1/2 (no plotting, plot only final, plot every iter)
-
-        """
-        model.net.eval()
-        H, W = model.input_size
-        h, w = model.mask_size
-        max_obj, max_S = float("-inf"), None
-        if V is None:
-            V = np.array(list(range(10)))
-        elif type(V) is list:
-            V = np.array(V)
-        if force_include_class:
-            assert force_include_class in V, "Error: class to be force-included not in ground set"
-
-        if KERNEL == 'terminal':
-            #print("PLT ION")
-            fig, ax = plt.subplots(1, 3, figsize = (4*3,4))
-            plt.ion()
-            plt.show()
-            ims = None
-        else:
-            fig, ax, ims = None, None, None
-
-
-        def handler(*args):
-            print('Ctrl-c detected: will stop iterative plotting')
-            nonlocal show_plot
-            show_plot = min(show_plot, 1)
-
-        #signal.signal(signal.SIGINT, handler)
-        #print(KERNEL)
-        if KERNEL == 'terminal': pbar = tqdm(total=(W-w)*(H-h))
-        for (ii,jj) in itertools.product(range(0, W-w),range(0,H-h)):
-                #print(ii,jj)
-                if KERNEL == 'terminal': pbar.update(1)
-                S = np.s_[ii:min(ii+h,H),jj:min(jj+w,W)]
-                X_s, X_s_plot = masker(x, S)
-                output = model(X_s)
-                hist = output.detach().numpy().squeeze()
-                hist_V = hist[V]
-                obj, C_rel = criterion(hist_V, pred = y, V = V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-
-                # Convert from relative indices to true classes
-                 #TODO: Maybe move this to criterion?
-                C = V[C_rel]
-
-                labstr = 'Current objective: {:8.4e} (i = {:2}, j = {:2})'.format(obj.item(), ii, jj)
-                if show_plot > 1:
-                    if KERNEL == 'ipython':
-                        clear_output(wait=True)
-                        ax = None
-
-                    ax, rects, ims = plot_2d_attrib_entailment(x, X_s_plot, S, C, V, hist_V,
-                                        plot_type = plot_type, class_names = class_names,
-                                        title = labstr, ax = ax, ims =ims, return_elements = True
-                                        )
-
-                    if KERNEL == 'terminal':
-                        plt.draw()
-                        plt.pause(.005)
-                        #rects[0].remove()
-                        ax[0].clear() # Alternatively, do rects[0].remove(), though its slower
-                        ax[1].clear()
-                        ax[2].clear()
-                    else:
-                        plt.show()
-                elif verbose:
-                    print(labstr)
-
-                if force_include_class is not None and (not force_include_class in C):
-                    # Target class not in entailed set
-                    #print(force_include_class, C)
-                    #print(obj, C_rel)
-                    #global DEBUG
-                    #DEBUG = True
-                    #obj, C_rel = criterion(hist_V, pred = y, V = V)#, verbose = True)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-                    obj = float("-inf")
-                    continue
-                if obj > max_obj:
-                    max_obj = obj
-                    max_S   = S
-
-        if KERNEL == 'terminal': pbar.close()
-        if max_S is None:
-            print('Warning: could not find any attribute that causes the predicted class be entailed')
-            return None, None, None
-
-        if KERNEL == 'terminal':
-            plt.ioff()
-            plt.close('all')
-
-        # Reconstruct vars for optimal
-        X_s, X_s_plot = masker(x, max_S)
-        output = model(X_s)
-        hist = output.detach().numpy().squeeze()
-        hist_V = hist[V]
-        obj, C_rel = criterion(hist_V, pred = y, V=V)#, sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-        max_C = V[C_rel]
-
-        ii, jj =  list(range(H)[max_S[0]])[0], list(range(W)[max_S[1]])[0]
-
-        assert obj == max_obj
-        labstr = 'Best objective: {:8.4f} (i = {:2}, j = {:2})'.format(max_obj.item(), ii, jj)
-        #clear_output(wait=True)
-        if show_plot:
-            plot_2d_attrib_entailment(x, X_s_plot, max_S, max_C, V, hist_V, plot_type=plot_type,
-            class_names = class_names,
-            topk = 10, title = labstr, sort_bars = True)
-            plt.show()
-        else:
-            print(labstr)
-
-        return max_S, max_C, hist_V
-
-    @staticmethod
-    def optimize_over_ngram_attributes(model, criterion, masker, x, y, V = None,
-                                 tgt_classes = [1,2], sort_hist = False,
-                                 show_plot = False, plot_type = 'treemap',
-                                 class_names = None, loss = 'euclidean',
-                                 force_include_class = None, verbose = False):
-        """
-            Given masking model, input x and target histogram, finds subset of x
-            (i.e., attribute) that minimizes loss with respect to target historgram.
-
-             - V: ground set of possible classes
-            plot: 0/1/2 (no plotting, plot only final, plot every iter)
-
-        """
-        model.net.eval()
-        N = x.shape[1]
-        n = model.mask_size
-        max_obj, max_S = 100*torch.ones(1), None
-        if V is None:
-            V = np.array(list(range(10)))
-        elif type(V) is list:
-            V = np.array(V)
-        if force_include_class:
-            assert force_include_class in V, "Error: class to be force-included not in ground set"
-
-        if KERNEL == 'terminal':
-            fig, ax = plt.subplots(1, 2, figsize = (10,4),
-                                gridspec_kw = {'width_ratios':[2, 1]})
-            plt.ion()
-            plt.show()
-            ims = None
-        else:
-            fig, ax, ims = None, None, None
-
-        def handler(*args):
-            print('Ctrl-c detected: will stop iterative plotting')
-            nonlocal show_plot
-            show_plot = min(show_plot, 1)
-
-        signal.signal(signal.SIGINT, handler)
-
-        for ii in range(0, N-n):
-            #print(ii)
-            S = np.s_[range(ii,ii+n)]
-            X_s    = masker(x, S)
-            output = model(X_s)
-            hist = output.detach().numpy().squeeze()
-            hist_V = hist[V]
-            obj, C_rel = criterion(hist_V, pred = y, V = V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-            #obj, C_rel = criterion(hist_V, V=V)#sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-            # Convert from relative indices to true classes
-             #TODO: Maybe move this to criterion?
-            C = V[C_rel]
-            labstr = 'Ngram: [{}:{}], Objective: {:8.4e}'.format(ii, ii+n,obj.item())
-            ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
-            if show_plot > 1:
-                if KERNEL == 'ipython':
-                    clear_output(wait=True)
-                    ax = None
-
-                ax = plot_text_attrib_entailment(x, X_s, S, C, V, hist_V,
-                                    plot_type = plot_type,
-                                    class_names = class_names,
-                                    vocab = model.vocab, ax = ax,
-                                    title = labstr, sort_bars = False)
-                if KERNEL == 'terminal':
-                    plt.draw()
-                    plt.pause(.005)
-                    ax[0].clear()
-                    ax[1].clear()
-                else:
-                    plt.show()
-            elif verbose:
-                #ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
-                #labstr = 'Ngram: {} ([{}:{}]), Objective: {:8.4e}'.format(ngram_str, ii, ii+n,obj.item())
-                print(labstr)
-
-            if force_include_class is not None and (not force_include_class in C):
-                # Target class not in entailed set
-                #print(force_include_class, C)
-                obj = float("-inf")
-                continue
-            if obj < max_obj:
-                max_obj = obj
-                max_S   = S
-                #clear_output(wait=True)
-
-        if max_S is None:
-            print('Warning: could not find any attribute that causes to predicted class be entailed')
-            return None, None, None
-
-        if KERNEL == 'terminal':
-            plt.ioff()
-            plt.close('all')
-
-        # Reconstruct vars for optimal
-        X_s = masker(x, max_S)
-        output = model(X_s)
-        hist = output.detach().numpy().squeeze()
-        hist_V = hist[V]
-        obj, C_rel = criterion(hist_V, pred = y, V = V)#, sort_hist = sort_hist, tgt_classes = tgt_classes, p = 1, loss = loss)
-        max_C = V[C_rel]
-        #print(asd.asd)
-        ii = max_S[0]
-
-        assert obj == max_obj
-        ngram_str = ' '.join([model.vocab.itos[w.item()] for w in X_s[0]])
-        labstr = 'Best objective: {:8.4f}, (i = {:2})'.format(max_obj.item(),ii)
-        #clear_output(wait=True)
-        if show_plot:
-                plot_text_attrib_entailment(x, X_s, max_S, max_C, V, hist_V,
-                                    plot_type = plot_type,
-                                    class_names = class_names,
-                                    vocab = model.vocab,
-                                    title = labstr, sort_bars = False)
-                plt.tight_layout()
-                plt.show()
-        else:
-            print(labstr)
-        return max_S, max_C, hist_V
-
-    # def criterion(self, pred, V, tgt_classes = [7,9], sort_hist = False, p = 1, loss = 'delta', verbose = False):
-    #     nclasses = len(V)
-    #     if sort_hist:
-    #         vals, inds = pred.sort(descending=True)
-    #     else:
-    #         vals = pred
-    #     if loss == 'euclidean':
-    #         # Target Histrogram
-    #         target_hist = torch.zeros(1, nclasses).detach()
-    #         target_hist[:,tgt_classes] = 1
-    #         target_hist /= target_hist.sum()
-    #         hist_loss  = (vals - target_hist).norm(p=p)
-    #     elif loss == 'delta':
-    #         #hist_loss  = torch.abs(delta_fun(vals) - delta_fun(target_hist))
-    #         hist_loss = -delta_fun(vals) # Minus because want to maximize delta
-    #     elif loss == 'cumul_delta':
-    #         hist_loss = -cumul_delta_fun(vals, verbose = verbose) # Minus because want to maximize delta
-    #     elif loss == 'norm_power':
-    #         obj, C = normalized_power(vals)
-    #         hist_loss = -obj
-    #     elif loss == 'norm_delta':
-    #         obj, C = normalized_deltas(vals)#, all_classes)
-    #         hist_loss = -obj
-    #     return hist_loss, C

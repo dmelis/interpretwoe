@@ -15,6 +15,7 @@ Multistep Contrsative Explanations
 * torchtext (needed only for text applications)
 * shapely
 * squarify
+* attrdict
 
 ## Installation
 
@@ -89,6 +90,11 @@ The first time main_ets.py is run, it will download golve embeddings (takes a fe
 * datasets.py - utils for loading datasets
 * methods.py -
 
+
+## Classes and methods
+
+* woe_wrapper() -> parent class for woe wrappers, torch/numpy agnostic
+  - woe_scikit_gnb() -> for Gaussan naive bayes model
 
 <!-- Otherwise, download Pretrained Models:
 

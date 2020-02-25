@@ -97,6 +97,7 @@ def main():
     args.nclasses = 10
     classes = [str(i) for i in range(10)]
     model_path, log_path, results_path = generate_dir_names('mnist', args)
+    home_dir = os.path.expandvars('$HOME')
 
     ### LOAD DATA
     train_loader, valid_loader, test_loader, train_tds, test_tds = load_mnist_data(
@@ -119,9 +120,9 @@ def main():
     ### TRAIN OR LOAD WOE ESTIMATOR
     mask_size = (args.attrib_width, args.attrib_height)
     #woe_model_path = os.path.join(model_path, "woe_model_{}x{}.pth".format(*mask_size))
-    woe_model_path  = '/Users/david/workspace/normalizing_flows/results/maf/blocks_rnd/B5_H2_128_lr1e-5/best_model_checkpoint.pt'
+    woe_model_path  = os.path.join(home_dir, 'workspace/normalizing_flows/results/maf/blocks_rnd/B5_H2_128_lr1e-5/best_model_checkpoint.pt')
     if args.train_meta or (not os.path.isfile(woe_model_path)):
-        raise NotImplemented("need to add this")
+        raise NotImplemented("need to add this - or put in a different script an expect trained LL/meta model?")
         print('Training meta masking model from scratch')
         # Label training examples with mnist_classifier
         # TODO: Before I was reloading dataset with shuffle=False. But it seems this

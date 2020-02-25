@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib import patches
 import matplotlib.gridspec as gridspec
+import seaborn as sns
+import pandas as pd
 
 import pdb
-from torchvision.utils import make_grid
 
 try:
     from IPython.display import clear_output
@@ -23,31 +24,17 @@ import matplotlib
 import squarify
 
 
-
 def detect_kernel():
     try:
         __IPYTHON__
     except NameError:
-        print("Not in IPython Kernel")
+        #print("Not in IPython Kernel")
         return 'terminal'
     else:
-        print("In IPython Kernel")
+        #print("In IPython Kernel")
         return 'ipython'
 
 KERNEL=detect_kernel()
-
-
-def tensorshow(img, greys = False):
-    """
-        For images in pytorch tensor format
-    """
-    npimg = img.numpy()
-    if greys:
-        plt.imshow(npimg[0], interpolation='nearest', cmap = 'Greys')
-    else:
-        plt.imshow(np.transpose(npimg, (1, 2, 0)), interpolation='nearest')
-    plt.show()
-
 
 def make_latex_grid(y, ncol=8, padding=2,
               normalize=False, scale_each=False, pad_value=0):
@@ -145,107 +132,7 @@ def animate_argopt(history, save_path = None):
         ani.save(save_path, writer=writer)
     return ani
 
-####################################################################
-################ CONTRACTION / FIXED POINT TOOLS ###################
-####################################################################
 
-def eval_contractiveness(f, data_loader):
-    total = 0
-    f.eval()
-    for batch_idx, (X,_) in enumerate(data_loader):
-        #data, target = data.to(self.device), data.to(self.device)
-        X_r = f(X)
-        b = X.shape[0]
-        X1, X2 = torch.split(X, [b/2, b/2], dim = 0)
-        X1_r, X2_r = torch.split(X_r, [b/2, b/2], dim = 0)
-        ratios = (X1_r - X2_r).view(int(b/2),-1).norm(dim=1) / \
-                 (X1 - X2).view(int(b/2),-1).norm(dim=1)
-        #print(ratios.sum())
-        total += ratios.sum()
-
-    return total/len(data_loader.dataset)
-
-
-
-def find_fixed_point(f, x0, maxiters = 20, tol = 1e-04, plot = True):
-    f.eval()
-    xp = x0.clone()
-
-    # if plot:
-    #     fig, ax = plt.subplots(1, 2, figsize = (8,4))
-    #     ax[0].imshow(x0.squeeze())
-    #     im = ax[1].imshow(xp.squeeze())
-    #     ax[0].axis('off')
-    #     ax[1].axis('off')
-    #     plt.show()
-
-    for i in range(maxiters):
-        xp_new = f(xp).reshape(1,28,28)
-        delta = (xp_new - xp).norm().detach().numpy()
-        if plot:
-            clear_output(wait=True)
-            #im.set_array(xp_new.detach().squeeze())
-            fig, ax = plt.subplots(1, 2, figsize = (8,4))
-            ax[0].imshow(x0.squeeze())
-            im = ax[1].imshow(xp_new.detach().squeeze())
-            ax[0].axis('off')
-            ax[1].axis('off')
-            ax[1].set_title('Iter {}, ||f(x(t)) - x(t)|| = {:.2e}'.format(i, delta))
-            plt.show()
-            #ax[1].draw()
-            #plt.draw()
-            #plt.imshow()
-            #plt.axis('off')
-            #plt.show()
-        else:
-            print(delta)
-        xp = xp_new
-        if delta < tol:
-            break
-    return xp
-
-
-def contraction_plot(f, X, Y, maxit=20):
-    """
-            - examples: list of tuples [(k, x)]
-    """
-    #ncol = len(examples)
-    ncol = X.shape[0]
-    fig, ax = plt.subplots(1,ncol,figsize = (2*ncol, 2))
-    for i in range(X.shape[0]):
-        ax[i].imshow(X[i].squeeze())
-        ax[i].axis('off')
-    plt.show()
-
-    for it in range(1, maxit+1):
-        fig, ax = plt.subplots(1, ncol, figsize = (2*ncol,2))
-        X_new = f(X)#.reshape(4,1,28,28)
-        change = (X_new - X).reshape(ncol,-1).norm(dim=1)
-        for i in range(ncol):
-            ax[i].imshow(X_new[i].detach().squeeze())
-            ax[i].set_title('{:4.2f}'.format(change[i].detach().numpy()))
-            ax[i].axis('off')
-        plt.show()
-
-        printstr = ["Iter: {:d}".format(it)]
-        for i in range(ncol):
-            for j in range(i+1, ncol):
-                lip  = ((X_new[j] - X_new[i]).norm()/(X[j] - X[i]).norm()).detach().numpy()
-                printstr.append('Lip({},{}): {:4.2f}'.format(Y[i], Y[j], lip))
-
-        print('\t'.join(printstr))
-        #print("Iter: {0:d}\t Lip({1},{1}): {3:4.2f}\t Lip({2},{2}): {4:4.2f}"
-        #"\t Lip({1},{2}): {5:4.2f}".format(it, classes[i], classes[j], lips[], lips[], lips))
-        X = X_new
-
-            #
-        # lip_c1  = ((X_new[1] - X_new[0]).norm()/(X[1] - X[0]).norm()).detach().numpy()
-        # lip_c2  = ((X_new[3] - X_new[2]).norm()/(X[3] - X[2]).norm()).detach().numpy()
-        # lip_c12 = ((X_new[2] - X_new[0]).norm()/(X[2] - X[0]).norm()).detach().numpy()
-
-
-
-    return X
 
 
 def plot_confusion_matrix(cm, classes,
@@ -671,20 +558,114 @@ def plot_text_explanation(words, values, n_cols = 6, ax = None, save_path = None
         plt.savefig(save_path + '_expl.pdf', bbox_inches = 'tight', format='pdf', dpi=300)
     #plt.show()
 
-from torch.utils.data.sampler import Sampler
+def annotate_group(name, span, ax=None, orient='h'):
+    """Annotates a span of the x-axis (or y-axis if orient ='v')"""
+    def annotate(ax, name, left, right, y, pad):
+        xy = (left, y) if orient == 'h' else (y, left)
+        xytext=(right, y-pad) if orient =='h' else (y+pad, right)
+        valign = 'top' if orient =='h' else 'center'
+        halign = 'center' if orient == 'h' else 'center'
+        rot = 0 if orient == 'h' else 0
+        if orient == 'h':
+            connectionstyle='angle,angleB=90,angleA=0,rad=5'
+        else:
+            connectionstyle='angle,angleB=0,angleA=-90,rad=5'
 
-class SubsetDeterministicSampler(Sampler):
-    r"""Samples elements sequentially (deterministically) from a given list of indices.
+        arrow = ax.annotate(name,
+                xy=xy, xycoords='data',
+                xytext=xytext, textcoords='data',
+                annotation_clip=False, verticalalignment=valign,
+                horizontalalignment=halign, linespacing=2.0,
+                arrowprops=dict(arrowstyle='-', shrinkA=0, shrinkB=0,
+                        connectionstyle=connectionstyle),
+                fontsize=8, rotation=rot
+                )
+        return arrow
+    if ax is None:
+        ax = plt.gca()
+    lim = ax.get_ylim()[0] if orient=='h' else ax.get_xlim()[1]
+    min = lim + (0.5 if orient =='h' else 0.5)
+    center = np.mean(span)
+    #pad = 0.01 * np.ptp(lim) # I had this but seems to be always 0
+    pad = 0.01 if orient == 'h' else 0.2
+    left_arrow  = annotate(ax, name, span[0], center, min, pad)
+    right_arrow = annotate(ax, name, span[1], center, min, pad)
+    return left_arrow, right_arrow
 
-    Arguments:
-        indices (sequence): a sequence of indices
+def range_plot(X, x0=None, colnames = None, plottype = 'box', groups=None, x0_labels=None, ax=None):
     """
+        If provided, groups should be an array of same rowlength of X, will be used as hue
+    """
+    plot_colors = {'pos': '#3C8ABE', 'neu': '#808080', 'neg': '#CF5246'}
+    palette = sns.color_palette([plot_colors[v] for v in ['neg', 'pos']])
+    #return_ax = ax is not None
+    #if type(X) is np.ndarray:
+    assert X.shape[1] == len(x0)
+    df = pd.DataFrame(X, columns = colnames)
+    #elif isinstance(X, pd.DataFrame):
+    #    X = df
 
-    def __init__(self, indices):
-        self.indices = indices
+    pargs = {}
 
-    def __iter__(self):
-        return (self.indices[i] for i in range(len(self.indices)))
+    if groups is not None:
+        #df = pd.concat([df, pd.DataFrame({'groups': groups})])
+        df['groups'] = groups
+        #
+        # df = pd.DataFrame(np.hstack([X, self.Y[:,None].astype(int)]),
+        #                   columns = list(self.features[feat_order]) + ['class'])
+        # Will need to melt to plot splitting vy var
+        #pdb.set_trace()
+        df = df.melt(id_vars= ['groups'])
+        pargs['hue'] = 'groups'
+        pargs['x'] = 'value'
+        pargs['y'] = 'variable'
+        #pdb.set_trace
+    if not ax:
+        fig, ax = plt.subplots(figsize=(8,8))
+    if plottype == 'swarm':
+        ax = sns.swarmplot(data=df, orient="h", palette="Set2", ax = ax, alpha = 0.5)
+    else:
+        ax = sns.boxplot(data=df, orient="h", **pargs, palette=palette, showfliers=False, ax = ax)#, boxprops=dict(alpha=.3))
+        #ax.xaxis.set_label_text("")
+        ax.set_xlabel(None)
+        for patch in ax.artists:
+            r, g, b, a = patch.get_facecolor()
+            patch.set_facecolor((r, g, b, .2))
+    if x0 is not None:
+        line, = ax.plot(x0, range(X.shape[1]), 'kd', linestyle='dashed', ms=5, linewidth=0.3, zorder = 1000)
+    if x0_labels is not None:
+        xmin,xmax = ax.get_xlim()
+        delta = xmax-xmin
+        pad = 0.1*delta
+        #farright = xmax - 0.5
+        ax.set_xlim(xmin, xmax+pad) # Give some buffer to point labels
+        for i,val in enumerate(x0_labels):
+            #ax.text(x0[i]+0.5, i, txt, fontsize=10, zorder = 1000)
+            if type(val) in [float, np.float64, np.float32]:
+                cstr = 'neg' if (val <= -2) else ('pos' if val >=2 else 'neu')
+                txt = '{:2.2f}'.format(val)
+            else:
+                cstr = 'k'
+                txt = '{:2}'.format(val)
+            #txt = '{:2.2f}'.format(val) if type(val) is float else '{}'.format(val)
+            #print(x0[i], val)
+            ax.text(xmax+0.6*pad, i, txt, fontsize=10, zorder = 1001, ha='right',
+                    color = plot_colors[cstr])
+    if groups is not None:
+        # Get rid of legend title
+        handles, labels = ax.get_legend_handles_labels()
+        ncol = 2
+        if x0 is not None:
+            # Also, add points to legend
+            handles.append(line)
+            labels.append('This example')
+            ncol+=1
+        ax.legend(handles=handles, labels=labels,loc='upper center',bbox_to_anchor=(0.5, -0.025),ncol=ncol)
 
-    def __len__(self):
-        return len(self.indices)
+    ax.set_title('Feature values of explained example vs training data')
+
+    return ax
+#     if return_ax:
+#         return ax
+#     else:
+#         plt.show()

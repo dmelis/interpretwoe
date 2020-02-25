@@ -10,8 +10,8 @@ from matplotlib import patches
 
 DEBUG = False
 
-sys.path.append('/Users/david/workspace/normalizing_flows')
-from maf import MAF
+# sys.path.append(os.path.expandvars('$HOME')+'/workspace/normalizing_flows')
+# from maf import MAF
 
 def mnist_unnormalize(x):
     return x.clone().mul_(.3081).add_(.1307)
@@ -47,6 +47,8 @@ def int2hot(idx, n = None):
 #     out[torch.arange(len(x)), x] = 1
 #     return out
 
+#### Should try to make woe_wrapper parent class agnostic to torch/numpy/scikit.
+
 class woe_wrapper():
     def __init__(self, model, task, classes, input_size):
         self.model = model
@@ -56,7 +58,6 @@ class woe_wrapper():
         self.data_transform = None
         self.cache = None
         self.caching = False
-
 
     def _start_caching(self):
         self.caching = True
@@ -114,7 +115,7 @@ class woe_wrapper():
                 loglike = self.log_prob_partial(subset, x, y)
         elif type(y) is list:
             if verbose: print('H is composite hypotesis')
-            priors = (torch.ones(k)/k)#.to(args.device)
+            priors = (torch.ones(k)/k)#.to(args.device) ## TODO: REAL PRIORS!!
             logpriors = torch.log(priors[y])
             logprior_set = torch.log(priors.sum())
             loglike = [[] for _ in range(len(y))]
@@ -320,7 +321,11 @@ class woe_maf(woe_wrapper):
         return self.model.forward(x, y)
 
     def log_prob(self, x, y):
-        # Identical to original MAF function but calls the wrapper's forward methjod instead
+        """
+            Returns conditional log probability P(X|Y).
+
+            Identical to original MAF function but calls the wrapper's forward methjod instead
+        """
         u, log_abs_det_jacobian = self.forward(x, y)
         ## TODO: I HAD self.u, self.log_abs_det_jacobian = self.forward(x, y). Really need to store?
         log_probs_base = self.model.base_dist.log_prob(u)
