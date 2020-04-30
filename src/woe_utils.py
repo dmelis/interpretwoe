@@ -47,6 +47,8 @@ def int2hot(idx, n = None):
 #     out[torch.arange(len(x)), x] = 1
 #     return out
 
+
+
 #### Should try to make woe_wrapper parent class agnostic to torch/numpy/scikit.
 
 class woe_wrapper():

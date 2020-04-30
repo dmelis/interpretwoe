@@ -1,0 +1,41 @@
+
+Before starting:
+	- Confirm that we have the user's signed consent form
+	- Confirm that they can see both notebooks
+
+*** Interview Starts ***
+
+R: Hi, thank you for participating in this user study. Let's start with some basic information. Can you please tell me:
+
+* Your first name: _________
+* Your age:        _________
+* Your gender:     _________
+* Your occupation: _________
+* How many years of experience do you have working in data science/machine learning:          _________
+
+
+R: Now, I'm going to ask you a few questions to set a baseline for your familiarity with some concepts we'll be exploring in this study. I'm going to list a few concepts of statistcs and machine learning. For each of them please tell on a scale of 1 to 5, where 1 is not familiar at all and 5 is very familiar, how familiar you are with each of the following:
+
+* Posterior probability
+* Log Likelihood
+* Log Odds
+* Weight of Evidence Score
+* Local interpretability methods like LIME or SHAP
+
+
+*** Part 1 ***
+
+* Q1: What aspect of the news article is the model relying on the most to make its prediction here?
+* Q2: The model is not too confident (p=0.68) that this news article belongs to the 'entertainment' class. Why do you think that is? How would you change the article to cause the model to be more confident?
+
+*** Part 2 ***
+
+* Q3: Why do you think the model didn't predict 'business' instead?
+* Q4: Why do you think the model didn't predict 'social media' instead?
+* Q5: For other news articles that have similar keywords to this one, how much more likely do you think it is that the model with predict `world` instead of other classes?
+
+*** Follow-Up Questions ***
+
+* Could you rate your experience using the interpretability tool (1-5)
+* Did you find the option to aggregate features intro groups useful? Yes/No, Why?
+* Did you find the option to produce multi-step explanations useful? Yes/No, Why?

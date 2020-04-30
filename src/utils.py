@@ -558,7 +558,7 @@ def plot_text_explanation(words, values, n_cols = 6, ax = None, save_path = None
         plt.savefig(save_path + '_expl.pdf', bbox_inches = 'tight', format='pdf', dpi=300)
     #plt.show()
 
-def annotate_group(name, span, ax=None, orient='h'):
+def annotate_group(name, span, ax=None, orient='h', pad=None, shift=0.5):
     """Annotates a span of the x-axis (or y-axis if orient ='v')"""
     def annotate(ax, name, left, right, y, pad):
         xy = (left, y) if orient == 'h' else (y, left)
@@ -584,26 +584,52 @@ def annotate_group(name, span, ax=None, orient='h'):
     if ax is None:
         ax = plt.gca()
     lim = ax.get_ylim()[0] if orient=='h' else ax.get_xlim()[1]
-    min = lim + (0.5 if orient =='h' else 0.5)
+    min = lim + (shift if orient =='h' else shift)
     center = np.mean(span)
     #pad = 0.01 * np.ptp(lim) # I had this but seems to be always 0
-    pad = 0.01 if orient == 'h' else 0.2
+    if pad is None:
+        pad = 0.01 if orient == 'h' else 0.2
     left_arrow  = annotate(ax, name, span[0], center, min, pad)
     right_arrow = annotate(ax, name, span[1], center, min, pad)
     return left_arrow, right_arrow
 
-def range_plot(X, x0=None, colnames = None, plottype = 'box', groups=None, x0_labels=None, ax=None):
+def range_plot(X, x0=None, colnames = None, plottype = 'box', groups=None,
+              x0_labels=None, color_values=True, ax=None):
     """
         If provided, groups should be an array of same rowlength of X, will be used as hue
     """
     plot_colors = {'pos': '#3C8ABE', 'neu': '#808080', 'neg': '#CF5246'}
-    palette = sns.color_palette([plot_colors[v] for v in ['neg', 'pos']])
-    #return_ax = ax is not None
-    #if type(X) is np.ndarray:
+
+
+    # This works only for binary, and assumes 0,1 in groups are neg/pos.
+    # palette = sns.color_palette([plot_colors[v] for v in ['neg', 'pos']])
+
+    #palette = sns.color_palette([plot_colors[v] for v in ['neg', 'pos']])
+    palette = sns.color_palette('pastel')
+
     assert X.shape[1] == len(x0)
+
+    X = X.copy()
+    if x0 is not None:
+        x0 = x0.copy()
+
+    # if rescale:
+    #     # We rescale so that boxplots are roughly aligned
+    #     # (do so only for nonbinary fetaures)
+    #     centers = np.median(X[:,self.nonbinary_feats], axis=0)
+    #     X[:,self.nonbinary_feats] -= centers
+    #
+    #     scales = np.std(X[:,self.nonbinary_feats], axis=0)
+    #     #scales = np.quantile(X[:,self.nonbinary_feats], .75, axis=0)
+    #     X[:,self.nonbinary_feats[scales > 0]] /= scales[scales>0]
+    #
+    #     # Must also rescale x0, but display it's tr
+    #     x[self.nonbinary_feats]   -= centers
+    #     x[self.nonbinary_feats[scales > 0]] /= scales[scales>0]
+
+
+
     df = pd.DataFrame(X, columns = colnames)
-    #elif isinstance(X, pd.DataFrame):
-    #    X = df
 
     pargs = {}
 
@@ -619,7 +645,6 @@ def range_plot(X, x0=None, colnames = None, plottype = 'box', groups=None, x0_la
         pargs['hue'] = 'groups'
         pargs['x'] = 'value'
         pargs['y'] = 'variable'
-        #pdb.set_trace
     if not ax:
         fig, ax = plt.subplots(figsize=(8,8))
     if plottype == 'swarm':
@@ -642,10 +667,13 @@ def range_plot(X, x0=None, colnames = None, plottype = 'box', groups=None, x0_la
         for i,val in enumerate(x0_labels):
             #ax.text(x0[i]+0.5, i, txt, fontsize=10, zorder = 1000)
             if type(val) in [float, np.float64, np.float32]:
-                cstr = 'neg' if (val <= -2) else ('pos' if val >=2 else 'neu')
-                txt = '{:2.2f}'.format(val)
+                if color_values:
+                    cstr = 'neg' if (val <= -2) else ('pos' if val >=2 else 'neu')
+                else:
+                    cstr = 'neu'
+                txt = '{:2.2e}'.format(val)
             else:
-                cstr = 'k'
+                cstr = 'neu'
                 txt = '{:2}'.format(val)
             #txt = '{:2.2f}'.format(val) if type(val) is float else '{}'.format(val)
             #print(x0[i], val)
