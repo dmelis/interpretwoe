@@ -1,0 +1,15 @@
+name: interpretwoe
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8.10
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - seaborn
+  - colored
+  - jupyterlab
+  - attrdict
+  - tqdm
