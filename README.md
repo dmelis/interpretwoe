@@ -4,7 +4,7 @@ Codebase accompanying the papers:
 * [Weight of Evidence as a Basis for Human-Oriented Explanations](https://arxiv.org/abs/1910.13503).
 * [From Human Explanation to Model Interpretability: A Framework Based on Weight of Evidence](https://arxiv.org/abs/2104.13299).
 
-See the papers for technical details, 
+See the papers for technical details. 
 
 ## Dependencies
 
